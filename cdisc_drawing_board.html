@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CDISC SDTM to ADaM Mapping Tool</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsPlumb/2.15.6/js/jsplumb.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary-color: #4f46e5;
+      --secondary-color: #f1f5f9;
+      --border-color: #e2e8f0;
+      --text-primary: #1e293b;
+      --text-secondary: #64748b;
+    }
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--secondary-color);
+      color: var(--text-primary);
+    }
+
+    /* Scrollable viewport */
+    .desktop {
+      width: 100%;
+      height: calc(100vh - 140px);
+      position: relative;
+      overflow: auto; /* scrollable board */
+      background-color: var(--secondary-color);
+    }
+
+    /* FIX: big inner canvas that actually grows; jsPlumb container lives here */
+    .canvas {
+      position: relative;
+      width: 4000px;     /* tweak as you like */
+      height: 3000px;    /* tweak as you like */
+      background-image:
+        linear-gradient(rgba(0, 0, 0, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 0, 0, 0.03) 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+
+    .dataset {
+      position: absolute;
+      background-color: white;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+      min-width: 300px;
+      z-index: 10;
+      transition: box-shadow 0.2s ease-in-out;
+    }
+    .dataset:hover {
+      box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.1);
+    }
+    .dataset-header {
+      padding: 12px 16px;
+      font-weight: 600;
+      border-bottom: 1px solid var(--border-color);
+      cursor: move;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .dataset-body { padding: 8px; }
+    .column {
+      display: flex;
+      align-items: center;
+      padding: 8px;
+      border-radius: 4px;
+      margin-bottom: 4px;
+      position: relative;
+    }
+    .adam-column { cursor: pointer; }
+    .adam-column:hover { background-color: #fafafa; }
+    .column.key-column { background-color: #eef2ff; }
+    .column-name { font-weight: 500; flex-grow: 1; }
+    .jtk-connector { z-index: 11; }
+    .jtk-endpoint { z-index: 12; }
+
+    .modal {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000;
+    }
+    .modal-content {
+      background: white; padding: 24px; border-radius: 8px;
+      width: 90%; max-width: 700px;
+    }
+  </style>
+</head>
+<body class="bg-slate-100">
+
+  <!-- Header -->
+  <header class="bg-white shadow-sm p-4 flex justify-between items-center">
+    <h1 class="text-2xl font-bold text-slate-800">CDISC SDTM to ADaM Mapping Tool</h1>
+    <div class="flex items-center space-x-2">
+      <button id="loadSpecBtn" class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-colors">Load Spec</button>
+      <button id="addSdtmBtn" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors">Add SDTM Domain</button>
+      <button id="addAdamBtn" class="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors">Add ADaM Dataset</button>
+      <button id="viewSpecBtn" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors">View Spec (YAML)</button>
+    </div>
+  </header>
+
+  <!-- Scrollable Desktop + FIX: inner Canvas -->
+  <main id="desktop" class="desktop">
+    <div id="canvas" class="canvas"></div>
+  </main>
+
+  <!-- SDTM Selection Modal -->
+  <div id="sdtmSelectionModal" class="modal hidden">
+    <div class="modal-content">
+      <h2 class="text-xl font-bold mb-4">Select SDTM Domain</h2>
+      <form id="sdtmSelectionForm">
+        <div class="mb-4">
+          <label for="sdtmDomainSelect" class="block text-sm font-medium text-gray-700">Domain</label>
+          <select id="sdtmDomainSelect" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"></select>
+        </div>
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700">Column Options</label>
+          <div class="mt-2 space-y-2">
+            <div class="flex items-center">
+              <input id="colOptAll" name="columnOption" type="radio" value="all" class="h-4 w-4 text-indigo-600 border-gray-300" checked>
+              <label for="colOptAll" class="ml-3 block text-sm font-medium text-gray-700">All Columns (Required + Permissible)</label>
+            </div>
+            <div class="flex items-center">
+              <input id="colOptReq" name="columnOption" type="radio" value="required" class="h-4 w-4 text-indigo-600 border-gray-300">
+              <label for="colOptReq" class="ml-3 block text-sm font-medium text-gray-700">Required Columns Only</label>
+            </div>
+          </div>
+        </div>
+        <div class="mt-6 flex justify-end space-x-2">
+          <button type="button" id="cancelSdtmSelectBtn" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300">Cancel</button>
+          <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">Add Domain</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add (ADaM) Dataset Modal -->
+  <div id="addDatasetModal" class="modal hidden">
+    <div class="modal-content">
+      <h2 id="modalTitle" class="text-xl font-bold mb-4">Add New ADaM Dataset</h2>
+      <form id="addDatasetForm">
+        <div class="mb-4">
+          <label for="datasetName" class="block text-sm font-medium text-gray-700">Dataset Name</label>
+          <input type="text" id="datasetName" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" required>
+        </div>
+        <h3 class="text-lg font-semibold mb-2">Columns</h3>
+        <div id="columnsContainer" class="space-y-2 max-h-60 overflow-y-auto pr-2"></div>
+        <div class="mt-4 flex justify-end">
+          <button type="button" id="addColumnBtn" class="text-sm text-indigo-600 hover:text-indigo-800">+ Add Custom Column</button>
+        </div>
+        <div class="mt-6 flex justify-end space-x-2">
+          <button type="button" id="cancelBtn" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300">Cancel</button>
+          <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">Create Dataset</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add Column to Existing Dataset Modal -->
+  <div id="addColumnModal" class="modal hidden">
+    <div class="modal-content">
+      <h2 id="addColumnModalTitle" class="text-xl font-bold mb-4">Add Column</h2>
+      <form id="addColumnForm">
+        <input type="hidden" id="addColumnDatasetName">
+        <div class="space-y-4">
+          <div>
+            <label for="newColName" class="block text-sm font-medium text-gray-700">Column Name</label>
+            <input type="text" id="newColName" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm" required>
+          </div>
+          <div>
+            <label for="newColDesc" class="block text-sm font-medium text-gray-700">Description</label>
+            <input type="text" id="newColDesc" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm">
+          </div>
+          <div class="flex items-center">
+            <input type="checkbox" id="newColKey" class="h-4 w-4 text-indigo-600 border-gray-300 rounded">
+            <label for="newColKey" class="ml-2 block text-sm text-gray-900">Is Key Column</label>
+          </div>
+        </div>
+        <div class="mt-6 flex justify-end space-x-2">
+          <button type="button" id="cancelAddColumnBtn" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300">Cancel</button>
+          <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">Add Column</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ADaM Column Derivation Modal -->
+  <div id="derivationModal" class="modal hidden">
+    <div class="modal-content">
+      <h2 id="derivationModalTitle" class="text-xl font-bold mb-4">Edit Derivation</h2>
+      <input type="hidden" id="derivationDatasetName">
+      <input type="hidden" id="derivationColumnName">
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700">Source Columns</label>
+        <div id="derivationSourceColumns" class="mt-1 p-2 bg-gray-50 border rounded-md text-sm text-gray-600 min-h-[40px]"></div>
+      </div>
+      <div class="mb-4">
+        <label for="derivationDescription" class="block text-sm font-medium text-gray-700">Description</label>
+        <textarea id="derivationDescription" rows="3" class="mt-1 block w-full rounded-md"></textarea>
+      </div>
+      <div class="mb-4">
+        <label for="derivationLogic" class="block text-sm font-medium text-gray-700">Derivation Logic</label>
+        <textarea id="derivationLogic" rows="5" class="mt-1 block w-full font-mono"></textarea>
+      </div>
+      <div class="mt-6 flex justify-end space-x-2">
+        <button type="button" id="cancelDerivationBtn" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md">Cancel</button>
+        <button type="button" id="saveDerivationBtn" class="bg-indigo-600 text-white px-4 py-2 rounded-md">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- YAML Spec Output Modal -->
+  <div id="specModal" class="modal hidden">
+    <div class="modal-content">
+      <h2 class="text-xl font-bold mb-4">Specification (YAML)</h2>
+      <textarea id="specOutput" readonly class="w-full h-80 p-2 border rounded-md font-mono text-sm bg-gray-50"></textarea>
+      <div class="mt-4 flex justify-end">
+        <button id="closeSpecBtn" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Load Spec from YAML Modal -->
+  <div id="loadSpecModal" class="modal hidden">
+    <div class="modal-content">
+      <h2 class="text-xl font-bold mb-4">Load Specification from YAML</h2>
+      <form id="loadSpecForm">
+        <textarea id="specInput" placeholder="Paste your YAML specification here..." class="w-full h-80 p-2 border rounded-md font-mono text-sm"></textarea>
+        <div class="mt-4 flex justify-end space-x-2">
+          <button type="button" id="cancelLoadSpecBtn" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md">Cancel</button>
+          <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-md">Load</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+  window.onload = function () {
+    jsPlumb.ready(function () {
+
+      // DOM
+      const desktop = document.getElementById('desktop');
+      const canvas  = document.getElementById('canvas'); // FIX: inner canvas container
+
+      const addSdtmBtn   = document.getElementById('addSdtmBtn');
+      const addAdamBtn   = document.getElementById('addAdamBtn');
+      const viewSpecBtn  = document.getElementById('viewSpecBtn');
+      const loadSpecBtn  = document.getElementById('loadSpecBtn');
+
+      // Modals
+      const sdtmSelectionModal = document.getElementById('sdtmSelectionModal');
+      const addDatasetModal    = document.getElementById('addDatasetModal');
+      const addColumnModal     = document.getElementById('addColumnModal');
+      const derivationModal    = document.getElementById('derivationModal');
+      const specModal          = document.getElementById('specModal');
+      const loadSpecModal      = document.getElementById('loadSpecModal');
+
+      // App State
+      let datasets     = {};
+      let connections  = {};
+      let datasetCounter = 0;
+
+      // --- SDTM IG Data (unchanged) ---
+      const sdtmDomains = {
+        'AE': { desc: 'Adverse Events', columns: [
+          { name:'STUDYID', desc:'Study Identifier', key:true, core:'Required' }, { name:'DOMAIN', desc:'Domain Abbreviation', key:false, core:'Required' },
+          { name:'USUBJID', desc:'Unique Subject Identifier', key:true, core:'Required' }, { name:'AESEQ', desc:'Sequence Number', key:false, core:'Required' },
+          { name:'AETERM', desc:'Reported Term for Adverse Event', key:false, core:'Required' },
+          { name:'AELLT', desc:'Lowest Level Term', key:false, core:'Permissible' }, { name:'AEBODSYS', desc:'Body System or Organ Class', key:false, core:'Permissible' },
+          { name:'AESER', desc:'Serious Event', key:false, core:'Permissible' }, { name:'AESTDTC', desc:'Start Date/Time of Adverse Event', key:false, core:'Required' },
+          { name:'AEENDTC', desc:'End Date/Time of Adverse Event', key:false, core:'Permissible' }
+        ]},
+        'CM': { desc: 'Concomitant Medications', columns: [
+          { name:'STUDYID', key:true, desc:'Study Identifier', core:'Required' }, { name:'DOMAIN', key:false, desc:'Domain Abbreviation', core:'Required' },
+          { name:'USUBJID', key:true, desc:'Unique Subject Identifier', core:'Required' }, { name:'CMSEQ', key:false, desc:'Sequence Number', core:'Required' },
+          { name:'CMTRT', key:false, desc:'Reported Name of Drug, Med, Therapy', core:'Required' }, { name:'CMINDC', key:false, desc:'Indication', core:'Permissible' },
+          { name:'CMDOSE', key:false, desc:'Dose per Administration', core:'Permissible' }, { name:'CMDOSU', key:false, desc:'Dose Units', core:'Permissible' },
+          { name:'CMSTDTC', key:false, desc:'Start Date/Time of Medication', core:'Required' }, { name:'CMENDTC', key:false, desc:'End Date/Time of Medication', core:'Permissible' }
+        ]},
+        'DM': { desc: 'Demographics', columns: [
+          { name:'STUDYID', key:true, desc:'Study Identifier', core:'Required' }, { name:'DOMAIN', key:false, desc:'Domain Abbreviation', core:'Required' },
+          { name:'USUBJID', key:true, desc:'Unique Subject Identifier', core:'Required' }, { name:'SUBJID', key:false, desc:'Subject Identifier for the Study', core:'Required' },
+          { name:'RFSTDTC', key:false, desc:'Subject Reference Start Date/Time', core:'Required' }, { name:'RFENDTC', key:false, desc:'Subject Reference End Date/Time', core:'Required' },
+          { name:'SITEID', key:false, desc:'Study Site Identifier', core:'Required' }, { name:'AGE', key:false, desc:'Age', core:'Permissible' },
+          { name:'SEX', key:false, desc:'Sex', core:'Permissible' }, { name:'RACE', key:false, desc:'Race', core:'Permissible' },
+          { name:'ETHNIC', key:false, desc:'Ethnicity', core:'Permissible' }, { name:'ARMCD', key:false, desc:'Planned Arm Code', core:'Required' },
+          { name:'ARM', key:false, desc:'Description of Planned Arm', core:'Required' }, { name:'ACTARMCD', key:false, desc:'Actual Arm Code', core:'Permissible' },
+          { name:'ACTARM', key:false, desc:'Description of Actual Arm', core:'Permissible' }
+        ]},
+        'DS': { desc: 'Disposition', columns: [
+          { name:'STUDYID', key:true, desc:'Study Identifier', core:'Required' }, { name:'DOMAIN', key:false, desc:'Domain Abbreviation', core:'Required' },
+          { name:'USUBJID', key:true, desc:'Unique Subject Identifier', core:'Required' }, { name:'DSSEQ', key:false, desc:'Sequence Number', core:'Required' },
+          { name:'DSTERM', key:false, desc:'Reported Term', core:'Required' }, { name:'DSDECOD', key:false, desc:'Standardized Term', core:'Required' },
+          { name:'DSCAT', key:false, desc:'Category of Disposition Event', core:'Permissible' }, { name:'DSDTC', key:false, desc:'Date/Time of Event', core:'Required' }
+        ]},
+        'EX': { desc: 'Exposure', columns: [
+          { name:'STUDYID', key:true, desc:'Study Identifier', core:'Required' }, { name:'DOMAIN', key:false, desc:'Domain Abbreviation', core:'Required' },
+          { name:'USUBJID', key:true, desc:'Unique Subject Identifier', core:'Required' }, { name:'EXSEQ', key:false, desc:'Sequence Number', core:'Required' },
+          { name:'EXTRT', key:false, desc:'Name of Treatment', core:'Required' }, { name:'EXDOSE', key:false, desc:'Dose', core:'Permissible' },
+          { name:'EXDOSU', key:false, desc:'Dose Units', core:'Permissible' }, { name:'EXSTDTC', key:false, desc:'Start Date/Time of Treatment', core:'Required' },
+          { name:'EXENDTC', key:false, desc:'End Date/Time of Treatment', core:'Required' }
+        ]},
+        'LB': { desc: 'Laboratory Test Results', columns: [
+          { name:'STUDYID', key:true, desc:'Study Identifier', core:'Required' }, { name:'DOMAIN', key:false, desc:'Domain Abbreviation', core:'Required' },
+          { name:'USUBJID', key:true, desc:'Unique Subject Identifier', core:'Required' }, { name:'LBSEQ', key:false, desc:'Sequence Number', core:'Required' },
+          { name:'LBTESTCD', key:false, desc:'Lab Test or Examination Short Name', core:'Required' }, { name:'LBTEST', key:false, desc:'Lab Test or Examination Name', core:'Required' },
+          { name:'LBCAT', key:false, desc:'Category for Lab Test', core:'Permissible' }, { name:'LBORRES', key:false, desc:'Result or Finding in Original Units', core:'Required' },
+          { name:'LBSTRESN', key:false, desc:'Numeric Result/Finding in Standard Units', core:'Permissible' }, { name:'LBNRIND', key:false, desc:'Normal Range Indicator', core:'Permissible' },
+          { name:'VISITNUM', key:false, desc:'Visit Number', core:'Permissible' }, { name:'LBDTC', key:false, desc:'Date/Time of Specimen Collection', core:'Required' }
+        ]},
+        'PE': { desc: 'Physical Examination', columns: [
+          { name:'STUDYID', key:true, desc:'Study Identifier', core:'Required' }, { name:'DOMAIN', key:false, desc:'Domain Abbreviation', core:'Required' },
+          { name:'USUBJID', key:true, desc:'Unique Subject Identifier', core:'Required' }, { name:'PESEQ', key:false, desc:'Sequence Number', core:'Required' },
+          { name:'PETESTCD', key:false, desc:'Physical Exam Test Short Name', core:'Required' }, { name:'PETEST', key:false, desc:'Physical Exam Test Name', core:'Required' },
+          { name:'PEORRES', key:false, desc:'Result or Finding in Original Units', core:'Required' }, { name:'PESTAT', key:false, desc:'Completion Status', core:'Permissible' },
+          { name:'PEDTC', key:false, desc:'Date/Time of Examination', core:'Required' }
+        ]},
+        'SV': { desc: 'Subject Visits', columns: [
+          { name:'STUDYID', key:true, desc:'Study Identifier', core:'Required' }, { name:'DOMAIN', key:false, desc:'Domain Abbreviation', core:'Required' },
+          { name:'USUBJID', key:true, desc:'Unique Subject Identifier', core:'Required' }, { name:'VISITNUM', key:false, desc:'Visit Number', core:'Required' },
+          { name:'VISIT', key:false, desc:'Visit Name', core:'Required' }, { name:'SVSTDTC', key:false, desc:'Visit Start Date/Time', core:'Required' },
+          { name:'SVENDTC', key:false, desc:'Visit End Date/Time', core:'Required' }
+        ]},
+        'VS': { desc: 'Vital Signs', columns: [
+          { name:'STUDYID', key:true, desc:'Study Identifier', core:'Required' }, { name:'DOMAIN', key:false, desc:'Domain Abbreviation', core:'Required' },
+          { name:'USUBJID', key:true, desc:'Unique Subject Identifier', core:'Required' }, { name:'VSSEQ', key:false, desc:'Sequence Number', core:'Required' },
+          { name:'VSTESTCD', key:false, desc:'Vital Signs Test Short Name', core:'Required' }, { name:'VSTEST', key:false, desc:'Vital Signs Test Name', core:'Required' },
+          { name:'VSPOS', key:false, desc:'Vital Signs Position of Subject', core:'Permissible' }, { name:'VSORRES', key:false, desc:'Result or Finding in Original Units', core:'Required' },
+          { name:'VSSTRESN', key:false, desc:'Numeric Result/Finding in Standard Units', core:'Permissible' }, { name:'VISITNUM', key:false, desc:'Visit Number', core:'Permissible' },
+          { name:'VISIT', key:false, desc:'Visit Name', core:'Permissible' }, { name:'VSDTC', key:false, desc:'Date/Time of Measurements', core:'Required' }
+        ]}
+      };
+
+      // jsPlumb Instance: FIX set Container to the inner canvas
+      const jsPlumbInstance = jsPlumb.getInstance({
+        Container: canvas, // FIX
+        Connector: ['Bezier', { curviness: 50 }],
+        PaintStyle: { stroke: '#64748b', strokeWidth: 2 },
+        Endpoint: ['Dot', { radius: 5 }],
+        EndpointStyle: { fill: '#64748b' },
+        HoverPaintStyle: { stroke: '#4f46e5', strokeWidth: 3 },
+        EndpointHoverStyle: { fill: '#4f46e5' }
+      });
+
+      // Safety: keep lines fresh on viewport changes
+      window.addEventListener('resize', () => jsPlumbInstance.repaintEverything());
+      desktop.addEventListener('scroll', () => jsPlumbInstance.repaintEverything());
+
+      // --- Initial SDTM dropdown ---
+      function populateSdtmSelect() {
+        const s = document.getElementById('sdtmDomainSelect');
+        s.innerHTML = '';
+        for (const domain in sdtmDomains) {
+          const opt = document.createElement('option');
+          opt.value = domain;
+          opt.textContent = `${domain} - ${sdtmDomains[domain].desc}`;
+          s.appendChild(opt);
+        }
+      }
+      populateSdtmSelect();
+
+      // --- Event Listeners ---
+      addSdtmBtn.addEventListener('click', () => sdtmSelectionModal.classList.remove('hidden'));
+      addAdamBtn.addEventListener('click', openAddAdamModal);
+      document.getElementById('cancelSdtmSelectBtn').addEventListener('click', () => sdtmSelectionModal.classList.add('hidden'));
+      document.getElementById('sdtmSelectionForm').addEventListener('submit', handleSdtmFormSubmit);
+
+      document.getElementById('cancelBtn').addEventListener('click', () => addDatasetModal.classList.add('hidden'));
+      document.getElementById('addColumnBtn').addEventListener('click', () => addColumnRow());
+      document.getElementById('addDatasetForm').addEventListener('submit', handleAdamFormSubmit);
+
+      document.getElementById('cancelDerivationBtn').addEventListener('click', () => derivationModal.classList.add('hidden'));
+      document.getElementById('saveDerivationBtn').addEventListener('click', saveDerivationLogic);
+
+      viewSpecBtn.addEventListener('click', showSpecModal);
+      document.getElementById('closeSpecBtn').addEventListener('click', () => specModal.classList.add('hidden'));
+
+      loadSpecBtn.addEventListener('click', () => loadSpecModal.classList.remove('hidden'));
+      document.getElementById('cancelLoadSpecBtn').addEventListener('click', () => loadSpecModal.classList.add('hidden'));
+      document.getElementById('loadSpecForm').addEventListener('submit', handleLoadSpec);
+
+      document.getElementById('cancelAddColumnBtn').addEventListener('click', () => addColumnModal.classList.add('hidden'));
+      document.getElementById('addColumnForm').addEventListener('submit', handleSaveNewColumn);
+
+      // --- Modal Functions ---
+      function openAddAdamModal() {
+        document.getElementById('addDatasetForm').reset();
+        document.getElementById('columnsContainer').innerHTML = '';
+        addDatasetModal.classList.remove('hidden');
+        addColumnRow({ name: 'STUDYID', desc: 'Study Identifier', key: true });
+        addColumnRow({ name: 'USUBJID', desc: 'Unique Subject Identifier', key: true });
+      }
+
+      function addColumnRow(col = { name: '', desc: '', key: false }) {
+        const container = document.getElementById('columnsContainer');
+        const div = document.createElement('div');
+        div.className = 'flex items-center space-x-2';
+        div.innerHTML = `
+          <input type="text" placeholder="Name" value="${col.name}" class="flex-1 block w-full px-2 py-1 bg-white border border-gray-300 rounded-md shadow-sm text-sm" required>
+          <input type="text" placeholder="Description" value="${col.desc}" class="flex-1 block w-full px-2 py-1 bg-white border border-gray-300 rounded-md shadow-sm text-sm">
+          <label class="flex items-center text-sm"><input type="checkbox" ${col.key ? 'checked' : ''} class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 mr-1">Key</label>
+          <button type="button" class="text-red-500 hover:text-red-700">&times;</button>
+        `;
+        div.querySelector('button').addEventListener('click', () => div.remove());
+        container.appendChild(div);
+      }
+
+      function openAddColumnModal(datasetName) {
+        document.getElementById('addColumnForm').reset();
+        document.getElementById('addColumnDatasetName').value = datasetName;
+        document.getElementById('addColumnModalTitle').textContent = `Add Column to ${datasetName}`;
+        addColumnModal.classList.remove('hidden');
+      }
+
+      function openDerivationModal(datasetName, columnName) {
+        const dataset = datasets[datasetName];
+        const column = dataset.columns.find(c => c.name === columnName);
+        if (!column) return;
+
+        document.getElementById('derivationModalTitle').textContent = `Edit Derivation for ${datasetName}.${columnName}`;
+        document.getElementById('derivationDatasetName').value = datasetName;
+        document.getElementById('derivationColumnName').value = columnName;
+        document.getElementById('derivationDescription').value = column.derivationDescription || '';
+        document.getElementById('derivationLogic').value = column.derivationLogic || '';
+
+        const srcDiv = document.getElementById('derivationSourceColumns');
+        const sources = Object.values(connections)
+          .filter(c => c.target.dataset === datasetName && c.target.column === columnName)
+          .map(c => `${c.source.dataset}.${c.source.column}`);
+
+        srcDiv.innerHTML = sources.length
+          ? `<ul>${sources.map(s => `<li class="font-mono">${s}</li>`).join('')}</ul>`
+          : `<p class="text-gray-500">No source columns connected.</p>`;
+
+        derivationModal.classList.remove('hidden');
+      }
+
+      // --- Form Handlers ---
+      function handleSdtmFormSubmit(e) {
+        e.preventDefault();
+        const domainName = document.getElementById('sdtmDomainSelect').value;
+        const colOption = document.querySelector('input[name="columnOption"]:checked').value;
+
+        let columns = sdtmDomains[domainName].columns;
+        if (colOption === 'required') columns = columns.filter(c => c.core === 'Required');
+
+        createDataset(domainName, 'SDTM', columns);
+        sdtmSelectionModal.classList.add('hidden');
+      }
+
+      function handleAdamFormSubmit(e) {
+        e.preventDefault();
+        const name = document.getElementById('datasetName').value.toUpperCase();
+        const rows = document.getElementById('columnsContainer').querySelectorAll('div');
+        const columns = Array.from(rows).map(row => ({
+          name: row.querySelector('input[placeholder="Name"]').value.toUpperCase(),
+          desc: row.querySelector('input[placeholder="Description"]').value,
+          key:  row.querySelector('input[type="checkbox"]').checked
+        }));
+        createDataset(name, 'ADaM', columns);
+        addDatasetModal.classList.add('hidden');
+      }
+
+      function handleSaveNewColumn(e) {
+        e.preventDefault();
+        const datasetName = document.getElementById('addColumnDatasetName').value;
+        const newCol = {
+          name: document.getElementById('newColName').value.toUpperCase(),
+          desc: document.getElementById('newColDesc').value,
+          key:  document.getElementById('newColKey').checked
+        };
+        if (!newCol.name) { alert("Column name cannot be empty."); return; }
+
+        const dataset = datasets[datasetName];
+        dataset.columns.push(newCol);
+
+        const datasetEl = document.getElementById(dataset.id);
+        const body = datasetEl.querySelector('.dataset-body');
+        appendColumnToBody(body, dataset.id, newCol, dataset.type);
+
+        jsPlumbInstance.revalidate(dataset.id);
+        addColumnModal.classList.add('hidden');
+      }
+
+      // --- Dataset Creation & Deletion ---
+      // FIX: allow optional position restore
+      function createDataset(name, type, columns, position = null) {
+        if (datasets[name]) { alert(`Dataset ${name} already exists on the desktop.`); return; }
+
+        datasetCounter++;
+        const datasetId = `ds-${name}`;
+        const datasetEl = document.createElement('div');
+        datasetEl.id = datasetId;
+        datasetEl.className = 'dataset';
+
+        // Default grid layout if no saved position
+        const leftPos = position?.left ?? (((datasetCounter - 1) % 4) * 320 + 20);
+        const topPos  = position?.top  ?? (20 + Math.floor((datasetCounter - 1) / 4) * 600);
+        datasetEl.style.left = `${leftPos}px`;
+        datasetEl.style.top  = `${topPos}px`;
+
+        const headerColor = type === 'SDTM' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800';
+        datasetEl.innerHTML = `
+          <div class="dataset-header ${headerColor}">
+            <span class="font-bold">${name} (${type})</span>
+            <div class="flex items-center">
+              <button class="add-col-btn text-blue-500 hover:text-blue-700 font-bold text-lg mr-2">+</button>
+              <button class="delete-ds text-red-500 font-bold text-lg hover:text-red-700">&times;</button>
+            </div>
+          </div>
+          <div class="dataset-body"></div>
+        `;
+
+        const body = datasetEl.querySelector('.dataset-body');
+
+        // FIX: append to CANVAS (jsPlumb container), not desktop
+        canvas.appendChild(datasetEl);
+
+        // Add columns + endpoints
+        columns.forEach(col => appendColumnToBody(body, datasetId, col, type));
+
+        datasets[name] = { id: datasetId, name, type, columns, position: { left: leftPos, top: topPos } };
+
+        datasetEl.querySelector('.delete-ds').addEventListener('click', (e) => {
+          e.stopPropagation();
+          deleteDataset(name);
+        });
+        datasetEl.querySelector('.add-col-btn').addEventListener('click', (e) => {
+          e.stopPropagation();
+          openAddColumnModal(name);
+        });
+
+        // Draggable within canvas
+        jsPlumbInstance.draggable(datasetEl, {
+          containment: 'parent', // the canvas
+          grid: [10, 10],
+          drag: () => jsPlumbInstance.repaintEverything(),
+          stop: (params) => {
+            // FIX: persist position for YAML
+            const el = params.el || datasetEl;
+            const left = parseFloat(el.style.left) || el.offsetLeft;
+            const top  = parseFloat(el.style.top)  || el.offsetTop;
+            if (datasets[name]) datasets[name].position = { left, top };
+            jsPlumbInstance.repaintEverything();
+          }
+        });
+      }
+
+      function appendColumnToBody(bodyEl, datasetId, col, type) {
+        const colEl = document.createElement('div');
+        let classList = `column ${col.key ? 'key-column' : ''}`;
+        if (type === 'ADaM') {
+          classList += ' adam-column';
+          col.derivationDescription = col.derivationDescription || '';
+          col.derivationLogic = col.derivationLogic || '';
+        }
+        colEl.className = classList;
+        colEl.id = `${datasetId}-${col.name}`;
+        colEl.innerHTML = `
+          <span class="column-name">${col.name}</span>
+          <span class="text-xs text-gray-500 truncate ml-2">${col.desc || ''}</span>
+        `;
+        bodyEl.appendChild(colEl);
+
+        if (type === 'ADaM') {
+          colEl.addEventListener('click', () => openDerivationModal(datasetId.substring(3), col.name));
+        }
+
+        // FIX: give each endpoint a stable UUID equal to the element id
+        const anchor = type === 'SDTM' ? 'Right' : 'Left';
+        jsPlumbInstance.addEndpoint(colEl.id, {
+          uuid: colEl.id,              // FIX: stable UUID
+          anchor: anchor,
+          isSource: type === 'SDTM',
+          isTarget: type === 'ADaM',
+          maxConnections: -1
+        });
+      }
+
+      function deleteDataset(name) {
+        if (!confirm(`Delete dataset ${name}? This will also remove connections.`)) return;
+        const dataset = datasets[name];
+        if (!dataset) return;
+
+        const datasetEl = document.getElementById(dataset.id);
+        if (datasetEl) jsPlumbInstance.remove(datasetEl);
+
+        delete datasets[name];
+
+        // Drop connections touching this dataset
+        Object.entries(connections).forEach(([cid, c]) => {
+          if (c.source.dataset === name || c.target.dataset === name) delete connections[cid];
+        });
+      }
+
+      // --- jsPlumb connection bookkeeping ---
+      jsPlumbInstance.bind('connection', (info) => {
+        const connId = info.connection.id;
+        const [ , srcDs, ...srcColParts] = info.sourceId.split('-');
+        const [ , tgtDs, ...tgtColParts] = info.targetId.split('-');
+        const sourceColName = srcColParts.join('-');
+        const targetColName = tgtColParts.join('-');
+
+        connections[connId] = {
+          source: { dataset: srcDs, column: sourceColName },
+          target: { dataset: tgtDs, column: targetColName }
+        };
+      });
+
+      jsPlumbInstance.bind('connectionDetached', (info) => {
+        delete connections[info.connection.id];
+      });
+
+      function saveDerivationLogic() {
+        const datasetName = document.getElementById('derivationDatasetName').value;
+        const columnName  = document.getElementById('derivationColumnName').value;
+        const dataset = datasets[datasetName];
+        const column  = dataset?.columns.find(c => c.name === columnName);
+        if (column) {
+          column.derivationDescription = document.getElementById('derivationDescription').value;
+          column.derivationLogic       = document.getElementById('derivationLogic').value;
+        }
+        derivationModal.classList.add('hidden');
+      }
+
+      // --- Data Import/Export ---
+      function generateSpec() {
+        const spec = {
+          datasets: Object.values(datasets).map(ds => {
+            const columns = ds.columns.map(col => {
+              const newCol = { name: col.name, desc: col.desc, key: col.key };
+              if (ds.type === 'ADaM') {
+                const sources = Object.values(connections)
+                  .filter(c => c.target.dataset === ds.name && c.target.column === col.name)
+                  .map(c => `${c.source.dataset}.${c.source.column}`);
+                newCol.derivation = {
+                  description: col.derivationDescription || '',
+                  logic: col.derivationLogic || '',
+                  sources: sources
+                };
+              }
+              return newCol;
+            });
+            // FIX: persist pane position
+            return { name: ds.name, type: ds.type, position: ds.position, columns: columns };
+          })
+        };
+        return spec;
+      }
+
+      function showSpecModal() {
+        const spec = generateSpec();
+        const yamlStr = jsyaml.dump(spec, { indent: 2 });
+        document.getElementById('specOutput').value = yamlStr;
+        specModal.classList.remove('hidden');
+      }
+
+      function clearBoard() {
+        Object.keys(datasets).forEach(name => {
+          const el = document.getElementById(datasets[name].id);
+          if (el) jsPlumbInstance.remove(el);
+        });
+        datasets = {};
+        connections = {};
+        datasetCounter = 0;
+      }
+
+      function handleLoadSpec(e) {
+        e.preventDefault();
+        const yamlString = document.getElementById('specInput').value;
+        if (!yamlString) return;
+
+        try {
+          const spec = jsyaml.load(yamlString);
+          if (!spec || !spec.datasets) throw new Error("Invalid YAML format.");
+
+          clearBoard();
+
+          // FIX: batch operations for stable layout
+          jsPlumbInstance.batch(() => {
+            // Pass 1: create datasets & columns (restore positions if present)
+            spec.datasets.forEach(ds => {
+              if (ds.type === 'ADaM') {
+                ds.columns.forEach(col => {
+                  if (col.derivation) {
+                    col.derivationDescription = col.derivation.description || '';
+                    col.derivationLogic       = col.derivation.logic || '';
+                  }
+                });
+              }
+              createDataset(ds.name, ds.type, ds.columns, ds.position || null);
+            });
+
+            // Pass 2: connect using UUIDs so anchors stay correct (Right/Left)
+            spec.datasets.forEach(ds => {
+              if (ds.type === 'ADaM') {
+                ds.columns.forEach(col => {
+                  const sources = col.derivation?.sources || [];
+                  sources.forEach(sourceStr => {
+                    const [sourceDataset, sourceColumn] = sourceStr.split('.');
+                    const sourceUuid = `ds-${sourceDataset}-${sourceColumn}`;
+                    const targetUuid = `ds-${ds.name}-${col.name}`;
+                    // FIX: connect by uuids (uses the pre-existing endpoints at Right/Left)
+                    jsPlumbInstance.connect({ uuids: [sourceUuid, targetUuid] });
+                  });
+                });
+              }
+            });
+          });
+
+          loadSpecModal.classList.add('hidden');
+
+        } catch (err) {
+          alert("Failed to load YAML. Please check the format.\n" + err.message);
+        }
+      }
+
+    });
+  };
+  </script>
+</body>
+</html>
