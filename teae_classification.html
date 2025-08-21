@@ -32,9 +32,12 @@
             <!-- Left Column: Timeline -->
             <div class="lg:w-2/3">
                 <div class="bg-white p-4 rounded-lg shadow-md mb-6 flex flex-wrap gap-4 justify-between items-center">
-                    <div class="flex items-center space-x-4">
+                    <div class="flex items-center space-x-2 flex-wrap gap-2">
                         <button id="add-ae-btn" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700">Add AE</button>
                         <button id="pseudo-btn" class="px-4 py-2 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700">Generate Pseudocode</button>
+                        <button id="export-btn" class="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700">Export XML</button>
+                        <button id="import-btn" class="px-4 py-2 bg-gray-600 text-white font-semibold rounded-lg shadow-md hover:bg-gray-700">Import XML</button>
+                        <input type="file" id="import-file-input" class="hidden" accept=".xml">
                     </div>
                 </div>
 
@@ -554,36 +557,118 @@
             reasoningPane.addEventListener('click', handleReasoningPaneClick);
             
             document.getElementById('add-ae-btn').addEventListener('click', showAddAEModal);
+            
+            document.getElementById('import-btn').addEventListener('click', () => document.getElementById('import-file-input').click());
+            document.getElementById('import-file-input').addEventListener('change', handleImportXML);
+            document.getElementById('export-btn').addEventListener('click', handleExportXML);
         }
 
-        document.getElementById('pseudo-btn').addEventListener('click', () => {
-             const pseudocode = `// Pseudocode for TEAE Determination (Treatment starts Day 1)
+        // --- IMPORT / EXPORT ---
+        function handleExportXML() {
+            let xmlString = '<?xml version="1.0" encoding="UTF-8"?>\n<teaeData>\n';
+            state.adverseEvents.forEach(ae => {
+                xmlString += `  <adverseEvent id="${ae.id}" name="${ae.name}" overrideTEAE="${ae.overrideTEAE}">\n`;
+                ae.segments.forEach(seg => {
+                    xmlString += `    <segment startDate="${seg.startDate}" endDate="${seg.endDate}" severity="${seg.severity}" />\n`;
+                });
+                xmlString += `  </adverseEvent>\n`;
+            });
+            xmlString += '</teaeData>';
 
+            const blob = new Blob([xmlString], { type: 'application/xml' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'teae-data.xml';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+
+        function handleImportXML(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const xmlContent = e.target.result;
+                    const parser = new DOMParser();
+                    const xmlDoc = parser.parseFromString(xmlContent, "application/xml");
+                    
+                    // Error handling for malformed XML
+                    const parseError = xmlDoc.querySelector("parsererror");
+                    if (parseError) {
+                        throw new Error("Failed to parse XML file. Please check the format.");
+                    }
+                    
+                    const newAEs = [];
+                    const aeNodes = xmlDoc.getElementsByTagName('adverseEvent');
+
+                    for (const node of aeNodes) {
+                        const segments = [];
+                        const segmentNodes = node.getElementsByTagName('segment');
+                        for (const segNode of segmentNodes) {
+                            segments.push({
+                                startDate: segNode.getAttribute('startDate'),
+                                endDate: segNode.getAttribute('endDate'),
+                                severity: segNode.getAttribute('severity'),
+                            });
+                        }
+
+                        let override = node.getAttribute('overrideTEAE');
+                        if (override === 'true') override = true;
+                        else if (override === 'false') override = false;
+                        else override = null;
+
+                        newAEs.push({
+                            id: node.getAttribute('id'),
+                            name: node.getAttribute('name'),
+                            overrideTEAE: override,
+                            segments: segments,
+                        });
+                    }
+                    state.adverseEvents = newAEs;
+                    state.selectedAEId = newAEs.length > 0 ? newAEs[0].id : null;
+                    renderAll();
+                } catch (error) {
+                    console.error("Import Error:", error);
+                    alert("Could not import file. Please ensure it is a valid XML exported from this tool.");
+                } finally {
+                    // Reset file input to allow re-importing the same file
+                    event.target.value = null;
+                }
+            };
+            reader.readAsText(file);
+        }
+
+
+        document.getElementById('pseudo-btn').addEventListener('click', () => {
+             const pseudocode = `// Pseudocode for TEAE Determination Logic
+
+// This function determines if an Adverse Event is Treatment-Emergent.
+// An AE is a collection of one or more periods where a patient experiences a condition.
+// Each period is a "Continous AE".
 FUNCTION isTreatmentEmergent(adverseEvent, treatmentStartDate):
-  // A TEAE is an event that emerges or worsens in severity
-  // on or after the first day of treatment (Day 1).
 
   // 1. Determine the pre-treatment severity.
-  //    This is the severity of the last AE segment active BEFORE Day 1.
+  //    This is the severity of the last Continous AE active BEFORE Day 1.
   preTreatmentSeverity = "None"
-  FOR EACH segment IN adverseEvent.segments SORTED BY startDate:
-    // Check segments that end before treatment or span the treatment start date
-    IF segment.endDate < treatmentStartDate OR segment.startDate < treatmentStartDate:
-      preTreatmentSeverity = segment.severity
+  FOR EACH ContinousAE IN adverseEvent.segments SORTED BY startDate:
+    // Check any Continous AE that ends before treatment or spans the treatment start date
+    IF ContinousAE.endDate < treatmentStartDate OR ContinousAE.startDate < treatmentStartDate:
+      preTreatmentSeverity = ContinousAE.severity
 
-  // 2. Iterate through segments to check for TEAE conditions.
-  FOR EACH segment IN adverseEvent.segments:
-    // Condition A: The segment starts on or after Day 1.
-    IF segment.startDate >= treatmentStartDate:
-      IF severity(segment.severity) > severity(preTreatmentSeverity):
+  // 2. Check all Continous AEs for TEAE conditions.
+  FOR EACH ContinousAE IN adverseEvent.segments:
+    // An AE is Treatment-Emergent if any of its continuous periods start on or after Day 1...
+    IF ContinousAE.startDate >= treatmentStartDate:
+      // ...AND its severity is greater than the pre-treatment severity.
+      // (This covers both new events and worsening of pre-existing, resolved events).
+      IF severity(ContinousAE.severity) > severity(preTreatmentSeverity):
+        // This Adverse Event IS Treatment-Emergent.
         RETURN TRUE
 
-    // Condition B: The segment starts before Day 1 but continues into it.
-    ELSE IF segment.endDate >= treatmentStartDate AND segment.startDate < treatmentStartDate:
-      IF severity(segment.severity) > severity(preTreatmentSeverity):
-        RETURN TRUE
-
-  // 3. If no conditions are met, the event is not treatment-emergent.
+  // 3. If no Continous AE meets the criteria, the event is not Treatment-Emergent.
   RETURN FALSE`;
             const modalHTML = `
                 <div class="modal fixed inset-0 bg-black bg-opacity-50 justify-center items-center z-50">
