@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bayesian Clinical Trial Design Explorer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jstat/1.9.5/jstat.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        .slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #3b82f6;
+            cursor: pointer;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 0 0 2px #3b82f680;
+        }
+        input[type='range']::-webkit-slider-thumb {
+           -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #3b82f6;
+            cursor: pointer;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 0 0 2px #3b82f680;
+        }
+        input[type='range']::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: #3b82f6;
+            cursor: pointer;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 0 0 2px #3b82f680;
+        }
+        .disabled-label {
+            color: #9ca3af;
+        }
+        .legend-dot {
+            height: 12px;
+            width: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-7xl">
+
+        <!-- Header -->
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Bayesian Clinical Trial Design Explorer</h1>
+            <p class="mt-2 text-lg text-gray-600">Interactively explore the impact of priors and evidence on posterior distributions.</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Controls Column -->
+            <div class="lg:col-span-1 bg-white p-6 rounded-2xl shadow-lg border border-gray-200">
+                <h2 class="text-2xl font-semibold mb-6 border-b pb-4">Parameters</h2>
+
+                <!-- Decision Rule -->
+                <div class="space-y-6">
+                    <div>
+                        <label for="xValue" class="block text-md font-medium text-gray-700 mb-2">Success Threshold (X)</label>
+                        <div class="flex items-center space-x-4">
+                            <input type="range" id="xValue" min="0" max="100" value="30" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                            <span id="xValueLabel" class="font-semibold text-blue-600 w-16 text-center text-lg">30%</span>
+                        </div>
+                        <p class="text-sm text-gray-500 mt-1">Percentage of patients achieving improvement.</p>
+                    </div>
+
+                    <div>
+                        <label for="yValue" class="block text-md font-medium text-gray-700 mb-2">Probability Threshold (Y)</label>
+                        <div class="flex items-center space-x-4">
+                            <input type="range" id="yValue" min="0" max="100" value="80" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                            <span id="yValueLabel" class="font-semibold text-blue-600 w-16 text-center text-lg">80%</span>
+                        </div>
+                        <p class="text-sm text-gray-500 mt-1">Required confidence that the success rate exceeds X.</p>
+                    </div>
+                </div>
+
+                <!-- Trial Data -->
+                <div class="mt-8 pt-6 border-t">
+                    <h3 class="text-xl font-semibold mb-4 text-gray-800">Trial Data</h3>
+                    <div class="space-y-6">
+                         <div>
+                            <label for="patients" class="block text-md font-medium text-gray-700 mb-2">Total Patients (n)</label>
+                            <div class="flex items-center space-x-4">
+                                <input type="range" id="patients" min="1" max="500" value="50" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                                <span id="patientsLabel" class="font-semibold text-blue-600 w-16 text-center text-lg">50</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label for="successes" class="block text-md font-medium text-gray-700 mb-2">Improved Patients (s)</label>
+                             <div class="flex items-center space-x-4">
+                                <input type="range" id="successes" min="0" max="50" value="20" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                                <span id="successesLabel" class="font-semibold text-blue-600 w-16 text-center text-lg">20</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Prior Selection -->
+                <div class="mt-8 pt-6 border-t">
+                     <h3 class="text-xl font-semibold mb-4 text-gray-800">Prior Distribution (Beta)</h3>
+                     <select id="priorSelect" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+                         <option value="non_informative">Non-Informative: Beta(1, 1)</option>
+                         <option value="optimistic_weak">Weakly Optimistic: Beta(3, 1)</option>
+                         <option value="pessimistic_weak">Weakly Pessimistic: Beta(1, 3)</option>
+                         <option value="optimistic_strong">Strongly Optimistic: Beta(10, 2)</option>
+                         <option value="pessimistic_strong">Strongly Pessimistic: Beta(2, 10)</option>
+                         <option value="custom">Custom</option>
+                     </select>
+                     <div id="customPrior" class="mt-4 space-y-4 hidden">
+                         <div>
+                             <label for="alpha" class="block text-sm font-medium text-gray-700">Alpha (α)</label>
+                             <input type="number" id="alpha" value="1" min="0.1" step="0.1" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 p-2">
+                         </div>
+                         <div>
+                             <label for="beta" class="block text-sm font-medium text-gray-700">Beta (β)</label>
+                             <input type="number" id="beta" value="1" min="0.1" step="0.1" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 p-2">
+                         </div>
+                     </div>
+                </div>
+            </div>
+
+            <!-- Visualization and Results Column -->
+            <div class="lg:col-span-2 bg-white p-6 rounded-2xl shadow-lg border border-gray-200">
+                <!-- Results Section -->
+                <div class="text-center mb-6 p-4 rounded-lg border border-gray-200 bg-gray-50">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-2">Decision Rule</h2>
+                    <p class="text-lg text-gray-600">
+                        Is <code class="bg-blue-100 text-blue-800 rounded px-2 py-1">Pr(Improvement Rate > <span id="xDisplay">30</span>%)</code> greater than <code class="bg-blue-100 text-blue-800 rounded px-2 py-1"><span id="yDisplay">80</span>%</code>?
+                    </p>
+                    <div id="resultBox" class="mt-4 text-2xl font-bold py-3 px-6 rounded-lg transition-colors duration-300">
+                        <!-- Result will be injected here -->
+                    </div>
+                </div>
+                
+                <!-- Chart -->
+                <div id="chartContainer" class="relative">
+                     <div class="flex justify-center items-center space-x-6 mb-2">
+                        <div class="flex items-center">
+                            <span class="legend-dot" style="background-color: #a5b4fc;"></span>
+                            <span class="text-sm">Prior</span>
+                        </div>
+                        <div class="flex items-center">
+                            <span class="legend-dot" style="background-color: #3b82f6;"></span>
+                            <span class="text-sm">Posterior</span>
+                        </div>
+                         <div class="flex items-center">
+                            <div class="h-3 w-3 mr-2" style="background-color: rgba(59, 130, 246, 0.3);"></div>
+                            <span class="text-sm">Pr(Rate > X) = <span id="probResult"></span></span>
+                        </div>
+                    </div>
+                    <svg id="chart" class="w-full h-96"></svg>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // DOM Elements
+            const xValueSlider = document.getElementById('xValue');
+            const yValueSlider = document.getElementById('yValue');
+            const patientsSlider = document.getElementById('patients');
+            const successesSlider = document.getElementById('successes');
+            const xValueLabel = document.getElementById('xValueLabel');
+            const yValueLabel = document.getElementById('yValueLabel');
+            const patientsLabel = document.getElementById('patientsLabel');
+            const successesLabel = document.getElementById('successesLabel');
+            const priorSelect = document.getElementById('priorSelect');
+            const customPriorDiv = document.getElementById('customPrior');
+            const alphaInput = document.getElementById('alpha');
+            const betaInput = document.getElementById('beta');
+            
+            // Result Display
+            const xDisplay = document.getElementById('xDisplay');
+            const yDisplay = document.getElementById('yDisplay');
+            const resultBox = document.getElementById('resultBox');
+            const probResult = document.getElementById('probResult');
+
+            // Chart
+            const svg = d3.select("#chart");
+            const margin = { top: 20, right: 30, bottom: 50, left: 50 };
+            let width, height;
+
+            const priors = {
+                non_informative: { alpha: 1, beta: 1 },
+                optimistic_weak: { alpha: 3, beta: 1 },
+                pessimistic_weak: { alpha: 1, beta: 3 },
+                optimistic_strong: { alpha: 10, beta: 2 },
+                pessimistic_strong: { alpha: 2, beta: 10 },
+            };
+            
+            function resizeChart() {
+                const container = document.getElementById('chartContainer');
+                width = container.clientWidth - margin.left - margin.right;
+                height = container.clientHeight - margin.top - margin.bottom;
+                svg.attr("width", width + margin.left + margin.right)
+                   .attr("height", height + margin.top + margin.bottom);
+            }
+
+            window.addEventListener('resize', () => {
+                resizeChart();
+                update();
+            });
+
+            function update() {
+                // 1. Get current values from controls
+                const x = parseInt(xValueSlider.value);
+                const y = parseInt(yValueSlider.value);
+                const n = parseInt(patientsSlider.value);
+                let s = parseInt(successesSlider.value);
+
+                // Ensure successes do not exceed patients
+                if (s > n) {
+                    s = n;
+                    successesSlider.value = s;
+                }
+                successesSlider.max = n;
+
+                // 2. Update labels
+                xValueLabel.textContent = `${x}%`;
+                yValueLabel.textContent = `${y}%`;
+                patientsLabel.textContent = n;
+                successesLabel.textContent = s;
+                xDisplay.textContent = x;
+                yDisplay.textContent = y;
+
+                // 3. Get prior parameters
+                let priorAlpha, priorBeta;
+                const priorSelection = priorSelect.value;
+                if (priorSelection === 'custom') {
+                    priorAlpha = parseFloat(alphaInput.value) || 1;
+                    priorBeta = parseFloat(betaInput.value) || 1;
+                } else {
+                    priorAlpha = priors[priorSelection].alpha;
+                    priorBeta = priors[priorSelection].beta;
+                }
+
+                // 4. Calculate posterior parameters
+                const posteriorAlpha = priorAlpha + s;
+                const posteriorBeta = priorBeta + (n - s);
+
+                // 5. Calculate probability and make decision
+                const probGreaterThanX = 1 - jStat.beta.cdf(x / 100, posteriorAlpha, posteriorBeta);
+                const decision = probGreaterThanX > (y / 100);
+
+                // 6. Update results display
+                probResult.textContent = (probGreaterThanX * 100).toFixed(2) + '%';
+                if (decision) {
+                    resultBox.textContent = "SUCCESS: The trial meets the criteria.";
+                    resultBox.className = resultBox.className.replace(/bg-\w+-200 text-\w+-800/, 'bg-green-200 text-green-800');
+                } else {
+                    resultBox.textContent = "FAILURE: The trial does not meet the criteria.";
+                    resultBox.className = resultBox.className.replace(/bg-\w+-200 text-\w+-800/, 'bg-red-200 text-red-800');
+                }
+                 // Force a class name if it's missing
+                if (!resultBox.className.includes('bg-')) {
+                   resultBox.className += ' bg-gray-200 text-gray-800';
+                }
+
+
+                // 7. Draw chart
+                drawChart(priorAlpha, priorBeta, posteriorAlpha, posteriorBeta, x / 100);
+            }
+
+            function drawChart(pAlpha, pBeta, postAlpha, postBeta, xThreshold) {
+                svg.selectAll("*").remove();
+                const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+                
+                const dataPoints = d3.range(0.005, 1, 0.005);
+                const priorData = dataPoints.map(d => ({ x: d, y: jStat.beta.pdf(d, pAlpha, pBeta) }));
+                const posteriorData = dataPoints.map(d => ({ x: d, y: jStat.beta.pdf(d, postAlpha, postBeta) }));
+
+                const maxY = d3.max([d3.max(priorData, d => d.y), d3.max(posteriorData, d => d.y)]);
+
+                const x = d3.scaleLinear().domain([0, 1]).range([0, width]);
+                const y = d3.scaleLinear().domain([0, maxY * 1.1]).range([height, 0]);
+
+                // X-axis
+                g.append("g")
+                    .attr("transform", `translate(0,${height})`)
+                    .call(d3.axisBottom(x).tickFormat(d3.format(".0%")))
+                    .append("text")
+                    .attr("y", 40)
+                    .attr("x", width / 2)
+                    .attr("text-anchor", "middle")
+                    .attr("fill", "currentColor")
+                    .style("font-size", "14px")
+                    .text("Patient Improvement Rate");
+
+                // Y-axis
+                g.append("g")
+                    .call(d3.axisLeft(y).ticks(5))
+                    .append("text")
+                    .attr("transform", "rotate(-90)")
+                    .attr("y", -40)
+                    .attr("x", -height / 2)
+                    .attr("text-anchor", "middle")
+                    .attr("fill", "currentColor")
+                    .style("font-size", "14px")
+                    .text("Probability Density");
+
+                // Area for Pr(Rate > X)
+                const area = d3.area()
+                    .x(d => x(d.x))
+                    .y0(height)
+                    .y1(d => y(d.y));
+
+                const areaData = posteriorData.filter(d => d.x >= xThreshold);
+                 // Add the boundary point to close the area shape correctly
+                if (areaData.length > 0 && areaData[0].x > xThreshold) {
+                    const boundaryY = jStat.beta.pdf(xThreshold, postAlpha, postBeta);
+                    areaData.unshift({x: xThreshold, y: boundaryY});
+                }
+
+
+                g.append("path")
+                    .datum(areaData)
+                    .attr("fill", "rgba(59, 130, 246, 0.3)")
+                    .attr("d", area);
+
+                const line = d3.line()
+                    .x(d => x(d.x))
+                    .y(d => y(d.y))
+                    .curve(d3.curveBasis);
+
+                // Prior line
+                g.append("path")
+                    .datum(priorData)
+                    .attr("fill", "none")
+                    .attr("stroke", "#a5b4fc")
+                    .attr("stroke-width", 2.5)
+                    .attr("stroke-dasharray", ("3, 3"))
+                    .attr("d", line);
+
+                // Posterior line
+                g.append("path")
+                    .datum(posteriorData)
+                    .attr("fill", "none")
+                    .attr("stroke", "#3b82f6")
+                    .attr("stroke-width", 3)
+                    .attr("d", line);
+
+                // Threshold line
+                g.append("line")
+                    .attr("x1", x(xThreshold))
+                    .attr("x2", x(xThreshold))
+                    .attr("y1", 0)
+                    .attr("y2", height)
+                    .attr("stroke", "black")
+                    .attr("stroke-width", 1.5)
+                    .attr("stroke-dasharray", "4,4");
+                
+                g.append("text")
+                    .attr("x", x(xThreshold) + 4)
+                    .attr("y", 15)
+                    .attr("fill", "black")
+                    .text(`X = ${(xThreshold*100).toFixed(0)}%`);
+            }
+            
+            // Event Listeners
+            [xValueSlider, yValueSlider, patientsSlider, successesSlider, priorSelect, alphaInput, betaInput].forEach(el => {
+                el.addEventListener('input', update);
+            });
+            
+            priorSelect.addEventListener('change', (e) => {
+                if(e.target.value === 'custom') {
+                    customPriorDiv.classList.remove('hidden');
+                } else {
+                    customPriorDiv.classList.add('hidden');
+                }
+                update();
+            });
+
+            // Initial setup
+            resizeChart();
+            update();
+        });
+    </script>
+</body>
+</html>
