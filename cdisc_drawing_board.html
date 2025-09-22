@@ -69,6 +69,13 @@
       justify-content: space-between;
       align-items: center;
     }
+    .dataset-header-title {
+        flex-grow: 1;
+    }
+    .dataset-header-actions {
+        display: flex;
+        align-items: center;
+    }
     .dataset-body { padding: 8px; }
     .column {
       display: flex;
@@ -94,6 +101,19 @@
     .modal-content {
       background: white; padding: 24px; border-radius: 8px;
       width: 90%; max-width: 700px;
+    }
+    .icon-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 4px;
+        border-radius: 99px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .icon-btn:hover {
+        background-color: rgba(0,0,0,0.05);
     }
   </style>
 </head>
@@ -166,6 +186,26 @@
       </form>
     </div>
   </div>
+
+  <!-- Edit ADaM Dataset Settings Modal -->
+  <div id="editDatasetModal" class="modal hidden">
+    <div class="modal-content">
+        <h2 id="editDatasetModalTitle" class="text-xl font-bold mb-4">Edit Dataset Settings</h2>
+        <form id="editDatasetForm">
+            <input type="hidden" id="editDatasetName">
+            <div class="mb-4">
+                <label for="editDatasetJoinKeys" class="block text-sm font-medium text-gray-700">Join Keys</label>
+                <input type="text" id="editDatasetJoinKeys" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm" placeholder="STUDYID, USUBJID">
+                <p class="mt-1 text-xs text-gray-500">Comma-separated list of columns to use when joining source datasets.</p>
+            </div>
+            <div class="mt-6 flex justify-end space-x-2">
+                <button type="button" id="cancelEditDatasetBtn" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md">Cancel</button>
+                <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-md">Save Settings</button>
+            </div>
+        </form>
+    </div>
+  </div>
+
 
   <!-- Add Column to Existing Dataset Modal -->
   <div id="addColumnModal" class="modal hidden">
@@ -261,6 +301,7 @@
       // Modals
       const sdtmSelectionModal = document.getElementById('sdtmSelectionModal');
       const addDatasetModal    = document.getElementById('addDatasetModal');
+      const editDatasetModal   = document.getElementById('editDatasetModal');
       const addColumnModal     = document.getElementById('addColumnModal');
       const derivationModal    = document.getElementById('derivationModal');
       const specModal          = document.getElementById('specModal');
@@ -384,6 +425,9 @@
       document.getElementById('cancelBtn').addEventListener('click', () => addDatasetModal.classList.add('hidden'));
       document.getElementById('addColumnBtn').addEventListener('click', () => addColumnRow());
       document.getElementById('addDatasetForm').addEventListener('submit', handleAdamFormSubmit);
+      
+      document.getElementById('cancelEditDatasetBtn').addEventListener('click', () => editDatasetModal.classList.add('hidden'));
+      document.getElementById('editDatasetForm').addEventListener('submit', handleSaveDatasetSettings);
 
       document.getElementById('cancelDerivationBtn').addEventListener('click', () => derivationModal.classList.add('hidden'));
       document.getElementById('saveDerivationBtn').addEventListener('click', saveDerivationLogic);
@@ -406,14 +450,12 @@
 
       // --- Selection and Highlighting ---
       function handleDatasetSelection(datasetName) {
-        // If the same dataset is clicked again, or if null is passed, deselect everything
         if (selectedDataset === datasetName || datasetName === null) {
             selectedDataset = null;
         } else {
             selectedDataset = datasetName;
         }
 
-        // Update visual state of datasets
         document.querySelectorAll('.dataset').forEach(el => {
             if (el.id === `ds-${selectedDataset}`) {
                 el.classList.add('selected');
@@ -422,23 +464,17 @@
             }
         });
 
-        // Update visual state of connections
-        const allConnections = jsPlumbInstance.getConnections();
-        allConnections.forEach(conn => {
+        jsPlumbInstance.getConnections().forEach(conn => {
             if (selectedDataset === null) {
-                // If nothing is selected, reset all to default
                 conn.setPaintStyle(defaultPaintStyle);
                 conn.endpoints.forEach(ep => ep.setPaintStyle(defaultEndpointStyle));
             } else {
                 const isSource = conn.sourceId.startsWith(`ds-${selectedDataset}-`);
                 const isTarget = conn.targetId.startsWith(`ds-${selectedDataset}-`);
-
                 if (isSource || isTarget) {
-                    // This connection is related, make it opaque
                     conn.setPaintStyle(defaultPaintStyle);
                     conn.endpoints.forEach(ep => ep.setPaintStyle(defaultEndpointStyle));
                 } else {
-                    // This connection is not related, make it transparent
                     conn.setPaintStyle(fadedPaintStyle);
                     conn.endpoints.forEach(ep => ep.setPaintStyle(fadedEndpointStyle));
                 }
@@ -476,6 +512,15 @@
         addColumnModal.classList.remove('hidden');
       }
 
+      function openEditDatasetModal(datasetName) {
+        const dataset = datasets[datasetName];
+        if (!dataset) return;
+        document.getElementById('editDatasetModalTitle').textContent = `Edit Settings for ${datasetName}`;
+        document.getElementById('editDatasetName').value = datasetName;
+        document.getElementById('editDatasetJoinKeys').value = dataset.joinKeys.join(', ');
+        editDatasetModal.classList.remove('hidden');
+      }
+
       function openDerivationModal(datasetName, columnName) {
         const dataset = datasets[datasetName];
         const column = dataset.columns.find(c => c.name === columnName);
@@ -504,10 +549,8 @@
         e.preventDefault();
         const domainName = document.getElementById('sdtmDomainSelect').value;
         const colOption = document.querySelector('input[name="columnOption"]:checked').value;
-
         let columns = sdtmDomains[domainName].columns;
         if (colOption === 'required') columns = columns.filter(c => c.core === 'Required');
-
         createDataset(domainName, 'SDTM', columns);
         sdtmSelectionModal.classList.add('hidden');
       }
@@ -525,6 +568,17 @@
         addDatasetModal.classList.add('hidden');
       }
 
+      function handleSaveDatasetSettings(e) {
+        e.preventDefault();
+        const datasetName = document.getElementById('editDatasetName').value;
+        const joinKeysStr = document.getElementById('editDatasetJoinKeys').value;
+        const dataset = datasets[datasetName];
+        if (dataset) {
+            dataset.joinKeys = joinKeysStr.split(',').map(k => k.trim().toUpperCase()).filter(k => k);
+        }
+        editDatasetModal.classList.add('hidden');
+      }
+
       function handleSaveNewColumn(e) {
         e.preventDefault();
         const datasetName = document.getElementById('addColumnDatasetName').value;
@@ -537,17 +591,15 @@
 
         const dataset = datasets[datasetName];
         dataset.columns.push(newCol);
-
         const datasetEl = document.getElementById(dataset.id);
         const body = datasetEl.querySelector('.dataset-body');
         appendColumnToBody(body, dataset.id, newCol, dataset.type);
-
         jsPlumbInstance.revalidate(dataset.id);
         addColumnModal.classList.add('hidden');
       }
 
       // --- Dataset Creation & Deletion ---
-      function createDataset(name, type, columns, position = null) {
+      function createDataset(name, type, columns, position = null, joinKeys = []) {
         if (datasets[name]) { alert(`Dataset ${name} already exists on the desktop.`); return; }
 
         datasetCounter++;
@@ -564,10 +616,20 @@
         const headerColor = type === 'SDTM' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800';
         datasetEl.innerHTML = `
           <div class="dataset-header ${headerColor}">
-            <span class="font-bold">${name} (${type})</span>
-            <div class="flex items-center">
-              <button class="add-col-btn text-blue-500 hover:text-blue-700 font-bold text-lg mr-2">+</button>
-              <button class="delete-ds text-red-500 font-bold text-lg hover:text-red-700">&times;</button>
+            <span class="dataset-header-title font-bold">${name} (${type})</span>
+            <div class="dataset-header-actions">
+                ${type === 'ADaM' ? `
+                <button class="settings-ds icon-btn" title="Settings">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311c.446.82.023 1.841-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c1.4-.413-1.4-2.397 0-2.81l.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872l-.1-.34zM8 10.93a2.929 2.929 0 1 1 0-5.86 2.929 2.929 0 0 1 0 5.858z"/>
+                    </svg>
+                </button>` : ''}
+              <button class="add-col-btn icon-btn" title="Add Column">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/></svg>
+              </button>
+              <button class="delete-ds icon-btn" title="Delete Dataset">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>
+              </button>
             </div>
           </div>
           <div class="dataset-body"></div>
@@ -577,25 +639,19 @@
         canvas.appendChild(datasetEl);
 
         columns.forEach(col => appendColumnToBody(body, datasetId, col, type));
-        datasets[name] = { id: datasetId, name, type, columns, position: { left: leftPos, top: topPos } };
+        datasets[name] = { id: datasetId, name, type, columns, joinKeys: joinKeys, position: { left: leftPos, top: topPos } };
 
-        datasetEl.addEventListener('click', (e) => {
-            e.stopPropagation();
-            handleDatasetSelection(name);
-        });
-
-        datasetEl.querySelector('.delete-ds').addEventListener('click', (e) => {
-          e.stopPropagation();
-          deleteDataset(name);
-        });
-        datasetEl.querySelector('.add-col-btn').addEventListener('click', (e) => {
-          e.stopPropagation();
-          openAddColumnModal(name);
-        });
-
+        datasetEl.addEventListener('click', (e) => { e.stopPropagation(); handleDatasetSelection(name); });
+        datasetEl.querySelector('.delete-ds').addEventListener('click', (e) => { e.stopPropagation(); deleteDataset(name); });
+        datasetEl.querySelector('.add-col-btn').addEventListener('click', (e) => { e.stopPropagation(); openAddColumnModal(name); });
+        
+        const settingsBtn = datasetEl.querySelector('.settings-ds');
+        if (settingsBtn) {
+            settingsBtn.addEventListener('click', (e) => { e.stopPropagation(); openEditDatasetModal(name); });
+        }
+        
         jsPlumbInstance.draggable(datasetEl, {
-          containment: 'parent',
-          grid: [10, 10],
+          containment: 'parent', grid: [10, 10],
           drag: () => jsPlumbInstance.repaintEverything(),
           stop: (params) => {
             const el = params.el || datasetEl;
@@ -625,19 +681,13 @@
 
         if (type === 'ADaM') {
           colEl.addEventListener('click', (e) => {
-              e.stopPropagation(); // prevent dataset selection when clicking a column
+              e.stopPropagation();
               openDerivationModal(datasetId.substring(3), col.name)
           });
-          jsPlumbInstance.addEndpoint(colEl.id, {
-            uuid: colEl.id + "-target", anchor: "Left", isTarget: true, maxConnections: -1
-          });
-          jsPlumbInstance.addEndpoint(colEl.id, {
-            uuid: colEl.id + "-source", anchor: "Right", isSource: true, maxConnections: -1
-          });
+          jsPlumbInstance.addEndpoint(colEl.id, { uuid: colEl.id + "-target", anchor: "Left", isTarget: true, maxConnections: -1 });
+          jsPlumbInstance.addEndpoint(colEl.id, { uuid: colEl.id + "-source", anchor: "Right", isSource: true, maxConnections: -1 });
         } else { // SDTM
-          jsPlumbInstance.addEndpoint(colEl.id, {
-            uuid: colEl.id, anchor: "Right", isSource: true, isTarget: false, maxConnections: -1
-          });
+          jsPlumbInstance.addEndpoint(colEl.id, { uuid: colEl.id, anchor: "Right", isSource: true, isTarget: false, maxConnections: -1 });
         }
       }
 
@@ -645,14 +695,9 @@
         if (!confirm(`Delete dataset ${name}? This will also remove connections.`)) return;
         const dataset = datasets[name];
         if (!dataset) return;
-
         if (selectedDataset === name) handleDatasetSelection(null);
-
-        const datasetEl = document.getElementById(dataset.id);
-        if (datasetEl) jsPlumbInstance.remove(datasetEl);
-
+        jsPlumbInstance.remove(document.getElementById(dataset.id));
         delete datasets[name];
-
         Object.entries(connections).forEach(([cid, c]) => {
           if (c.source.dataset === name || c.target.dataset === name) delete connections[cid];
         });
@@ -663,12 +708,9 @@
         const connId = info.connection.id;
         const [ , srcDs, ...srcColParts] = info.sourceId.split('-');
         const [ , tgtDs, ...tgtColParts] = info.targetId.split('-');
-        const sourceColName = srcColParts.join('-');
-        const targetColName = tgtColParts.join('-');
-
         connections[connId] = {
-          source: { dataset: srcDs, column: sourceColName },
-          target: { dataset: tgtDs, column: targetColName }
+          source: { dataset: srcDs, column: srcColParts.join('-') },
+          target: { dataset: tgtDs, column: tgtColParts.join('-') }
         };
       });
 
@@ -679,8 +721,7 @@
       function saveDerivationLogic() {
         const datasetName = document.getElementById('derivationDatasetName').value;
         const columnName  = document.getElementById('derivationColumnName').value;
-        const dataset = datasets[datasetName];
-        const column  = dataset?.columns.find(c => c.name === columnName);
+        const column = datasets[datasetName]?.columns.find(c => c.name === columnName);
         if (column) {
           column.derivationDescription = document.getElementById('derivationDescription').value;
           column.derivationLogic       = document.getElementById('derivationLogic').value;
@@ -690,31 +731,31 @@
 
       // --- Data Import/Export ---
       function generateSpec() {
-        const spec = {
-          datasets: Object.values(datasets).map(ds => {
-            const columns = ds.columns.map(col => {
+        return {
+          datasets: Object.values(datasets).map(ds => ({
+            name: ds.name,
+            type: ds.type,
+            position: ds.position,
+            join_keys: ds.type === 'ADaM' ? ds.joinKeys : undefined,
+            columns: ds.columns.map(col => {
               const newCol = { name: col.name, desc: col.desc, key: col.key };
               if (ds.type === 'ADaM') {
-                const sources = Object.values(connections)
-                  .filter(c => c.target.dataset === ds.name && c.target.column === col.name)
-                  .map(c => `${c.source.dataset}.${c.source.column}`);
                 newCol.derivation = {
                   description: col.derivationDescription || '',
                   logic: col.derivationLogic || '',
-                  sources: sources
+                  sources: Object.values(connections)
+                    .filter(c => c.target.dataset === ds.name && c.target.column === col.name)
+                    .map(c => `${c.source.dataset}.${c.source.column}`)
                 };
               }
               return newCol;
-            });
-            return { name: ds.name, type: ds.type, position: ds.position, columns: columns };
-          })
+            })
+          }))
         };
-        return spec;
       }
 
       function showSpecModal() {
-        const spec = generateSpec();
-        const yamlStr = jsyaml.dump(spec, { indent: 2 });
+        const yamlStr = jsyaml.dump(generateSpec(), { indent: 2, skipInvalid: true });
         document.getElementById('specOutput').value = yamlStr;
         specModal.classList.remove('hidden');
       }
@@ -722,8 +763,7 @@
       function clearBoard() {
         handleDatasetSelection(null);
         Object.keys(datasets).forEach(name => {
-          const el = document.getElementById(datasets[name].id);
-          if (el) jsPlumbInstance.remove(el);
+          jsPlumbInstance.remove(document.getElementById(datasets[name].id));
         });
         datasets = {};
         connections = {};
@@ -740,43 +780,36 @@
           if (!spec || !spec.datasets) throw new Error("Invalid YAML format.");
 
           clearBoard();
-
           jsPlumbInstance.batch(() => {
             spec.datasets.forEach(ds => {
-              if (ds.type === 'ADaM') {
-                ds.columns.forEach(col => {
-                  if (col.derivation) {
-                    col.derivationDescription = col.derivation.description || '';
-                    col.derivationLogic       = col.derivation.logic || '';
-                  }
-                });
-              }
-              createDataset(ds.name, ds.type, ds.columns, ds.position || null);
+              ds.columns.forEach(col => {
+                if (col.derivation) {
+                  col.derivationDescription = col.derivation.description || '';
+                  col.derivationLogic       = col.derivation.logic || '';
+                }
+              });
+              createDataset(ds.name, ds.type, ds.columns, ds.position || null, ds.join_keys || []);
             });
 
             spec.datasets.forEach(ds => {
-              if (ds.type === 'ADaM') {
-                ds.columns.forEach(col => {
-                  const sources = col.derivation?.sources || [];
-                  sources.forEach(sourceStr => {
-                    const [sourceDataset, sourceColumn] = sourceStr.split('.');
-                    const sourceDatasetObject = datasets[sourceDataset];
-                    const sourceUuidBase = `ds-${sourceDataset}-${sourceColumn}`;
-                    const targetUuidBase = `ds-${ds.name}-${col.name}`;
+              if (ds.type !== 'ADaM') return;
+              ds.columns.forEach(col => {
+                (col.derivation?.sources || []).forEach(sourceStr => {
+                  const [sourceDataset, sourceColumn] = sourceStr.split('.');
+                  const sourceDsObj = datasets[sourceDataset];
+                  if (!sourceDsObj) return;
 
-                    if (sourceDatasetObject && sourceDatasetObject.type === 'ADaM') {
-                        jsPlumbInstance.connect({ uuids: [sourceUuidBase + "-source", targetUuidBase + "-target"] });
-                    } else { // SDTM source
-                        jsPlumbInstance.connect({ uuids: [sourceUuidBase, targetUuidBase + "-target"] });
-                    }
-                  });
+                  const sourceUuidBase = `ds-${sourceDataset}-${sourceColumn}`;
+                  const targetUuidBase = `ds-${ds.name}-${col.name}`;
+                  const sourceUuid = sourceDsObj.type === 'ADaM' ? `${sourceUuidBase}-source` : sourceUuidBase;
+                  const targetUuid = `${targetUuidBase}-target`;
+
+                  jsPlumbInstance.connect({ uuids: [sourceUuid, targetUuid] });
                 });
-              }
+              });
             });
           });
-
           loadSpecModal.classList.add('hidden');
-
         } catch (err) {
           alert("Failed to load YAML. Please check the format.\n" + err.message);
         }
@@ -787,3 +820,4 @@
   </script>
 </body>
 </html>
+
