@@ -193,10 +193,16 @@
         <h2 id="editDatasetModalTitle" class="text-xl font-bold mb-4">Edit Dataset Settings</h2>
         <form id="editDatasetForm">
             <input type="hidden" id="editDatasetName">
-            <div class="mb-4">
-                <label for="editDatasetJoinKeys" class="block text-sm font-medium text-gray-700">Join Keys</label>
-                <input type="text" id="editDatasetJoinKeys" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm" placeholder="STUDYID, USUBJID">
-                <p class="mt-1 text-xs text-gray-500">Comma-separated list of columns to use when joining source datasets.</p>
+            <div class="space-y-4">
+                <div>
+                    <label for="editDatasetJoinKeys" class="block text-sm font-medium text-gray-700">Join Keys</label>
+                    <input type="text" id="editDatasetJoinKeys" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm" placeholder="STUDYID, USUBJID">
+                    <p class="mt-1 text-xs text-gray-500">Comma-separated list of columns to use when joining source datasets.</p>
+                </div>
+                <div class="flex items-center pt-2">
+                    <input type="checkbox" id="editDatasetOneRow" class="h-4 w-4 text-indigo-600 border-gray-300 rounded">
+                    <label for="editDatasetOneRow" class="ml-2 block text-sm text-gray-900">One row per subject</label>
+                </div>
             </div>
             <div class="mt-6 flex justify-end space-x-2">
                 <button type="button" id="cancelEditDatasetBtn" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md">Cancel</button>
@@ -518,6 +524,7 @@
         document.getElementById('editDatasetModalTitle').textContent = `Edit Settings for ${datasetName}`;
         document.getElementById('editDatasetName').value = datasetName;
         document.getElementById('editDatasetJoinKeys').value = dataset.joinKeys.join(', ');
+        document.getElementById('editDatasetOneRow').checked = dataset.oneRowPerSubject;
         editDatasetModal.classList.remove('hidden');
       }
 
@@ -572,9 +579,11 @@
         e.preventDefault();
         const datasetName = document.getElementById('editDatasetName').value;
         const joinKeysStr = document.getElementById('editDatasetJoinKeys').value;
+        const oneRow = document.getElementById('editDatasetOneRow').checked;
         const dataset = datasets[datasetName];
         if (dataset) {
             dataset.joinKeys = joinKeysStr.split(',').map(k => k.trim().toUpperCase()).filter(k => k);
+            dataset.oneRowPerSubject = oneRow;
         }
         editDatasetModal.classList.add('hidden');
       }
@@ -599,7 +608,8 @@
       }
 
       // --- Dataset Creation & Deletion ---
-      function createDataset(name, type, columns, position = null, joinKeys = []) {
+      function createDataset(name, type, columns, options = {}) {
+        const { position = null, joinKeys = [], oneRowPerSubject = false } = options;
         if (datasets[name]) { alert(`Dataset ${name} already exists on the desktop.`); return; }
 
         datasetCounter++;
@@ -621,7 +631,7 @@
                 ${type === 'ADaM' ? `
                 <button class="settings-ds icon-btn" title="Settings">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                        <path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311c.446.82.023 1.841-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c1.4-.413-1.4-2.397 0-2.81l.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872l-.1-.34zM8 10.93a2.929 2.929 0 1 1 0-5.86 2.929 2.929 0 0 1 0 5.858z"/>
+                        <path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311c.446.82.023 1.841-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c-1.4-.413-1.4-2.397 0-2.81l.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872l-.1-.34zM8 10.93a2.929 2.929 0 1 1 0-5.86 2.929 2.929 0 0 1 0 5.858z"/>
                     </svg>
                 </button>` : ''}
               <button class="add-col-btn icon-btn" title="Add Column">
@@ -639,7 +649,7 @@
         canvas.appendChild(datasetEl);
 
         columns.forEach(col => appendColumnToBody(body, datasetId, col, type));
-        datasets[name] = { id: datasetId, name, type, columns, joinKeys: joinKeys, position: { left: leftPos, top: topPos } };
+        datasets[name] = { id: datasetId, name, type, columns, joinKeys, oneRowPerSubject, position: { left: leftPos, top: topPos } };
 
         datasetEl.addEventListener('click', (e) => { e.stopPropagation(); handleDatasetSelection(name); });
         datasetEl.querySelector('.delete-ds').addEventListener('click', (e) => { e.stopPropagation(); deleteDataset(name); });
@@ -737,6 +747,7 @@
             type: ds.type,
             position: ds.position,
             join_keys: ds.type === 'ADaM' ? ds.joinKeys : undefined,
+            one_row_per_subject: ds.type === 'ADaM' ? ds.oneRowPerSubject : undefined,
             columns: ds.columns.map(col => {
               const newCol = { name: col.name, desc: col.desc, key: col.key };
               if (ds.type === 'ADaM') {
@@ -788,7 +799,11 @@
                   col.derivationLogic       = col.derivation.logic || '';
                 }
               });
-              createDataset(ds.name, ds.type, ds.columns, ds.position || null, ds.join_keys || []);
+              createDataset(ds.name, ds.type, ds.columns, { 
+                  position: ds.position, 
+                  joinKeys: ds.join_keys, 
+                  oneRowPerSubject: ds.one_row_per_subject 
+              });
             });
 
             spec.datasets.forEach(ds => {
