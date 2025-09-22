@@ -51,10 +51,14 @@
       box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
       min-width: 300px;
       z-index: 10;
-      transition: box-shadow 0.2s ease-in-out;
+      transition: box-shadow 0.2s ease-in-out, border-color 0.2s ease-in-out;
     }
     .dataset:hover {
       box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.1);
+    }
+    .dataset.selected {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.3), 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.1);
     }
     .dataset-header {
       padding: 12px 16px;
@@ -78,8 +82,8 @@
     .adam-column:hover { background-color: #fafafa; }
     .column.key-column { background-color: #eef2ff; }
     .column-name { font-weight: 500; flex-grow: 1; }
-    .jtk-connector { z-index: 11; }
-    .jtk-endpoint { z-index: 12; }
+    .jtk-connector { z-index: 11; transition: opacity 0.3s ease-in-out; }
+    .jtk-endpoint { z-index: 12; transition: opacity 0.3s ease-in-out; }
 
     .modal {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -247,7 +251,7 @@
 
       // DOM
       const desktop = document.getElementById('desktop');
-      const canvas  = document.getElementById('canvas'); // FIX: inner canvas container
+      const canvas  = document.getElementById('canvas');
 
       const addSdtmBtn   = document.getElementById('addSdtmBtn');
       const addAdamBtn   = document.getElementById('addAdamBtn');
@@ -263,9 +267,10 @@
       const loadSpecModal      = document.getElementById('loadSpecModal');
 
       // App State
-      let datasets     = {};
-      let connections  = {};
+      let datasets       = {};
+      let connections    = {};
       let datasetCounter = 0;
+      let selectedDataset = null;
 
       // --- SDTM IG Data (unchanged) ---
       const sdtmDomains = {
@@ -325,8 +330,7 @@
         'SV': { desc: 'Subject Visits', columns: [
           { name:'STUDYID', key:true, desc:'Study Identifier', core:'Required' }, { name:'DOMAIN', key:false, desc:'Domain Abbreviation', core:'Required' },
           { name:'USUBJID', key:true, desc:'Unique Subject Identifier', core:'Required' }, { name:'VISITNUM', key:false, desc:'Visit Number', core:'Required' },
-          { name:'VISIT', key:false, desc:'Visit Name', core:'Required' }, { name:'SVSTDTC', key:false, desc:'Visit Start Date/Time', core:'Required' },
-          { name:'SVENDTC', key:false, desc:'Visit End Date/Time', core:'Required' }
+          { name:'VISIT', key:false, desc:'Visit Name', core:'Required' }, { name:'SVSTDTC', key:false, desc:'Visit Start Date/Time', core:'Required' }, { name:'SVENDTC', key:false, desc:'Visit End Date/Time', core:'Required' }
         ]},
         'VS': { desc: 'Vital Signs', columns: [
           { name:'STUDYID', key:true, desc:'Study Identifier', core:'Required' }, { name:'DOMAIN', key:false, desc:'Domain Abbreviation', core:'Required' },
@@ -337,14 +341,19 @@
           { name:'VISIT', key:false, desc:'Visit Name', core:'Permissible' }, { name:'VSDTC', key:false, desc:'Date/Time of Measurements', core:'Required' }
         ]}
       };
+      
+      const defaultPaintStyle    = { stroke: '#64748b', strokeWidth: 2 };
+      const defaultEndpointStyle = { fill: '#64748b' };
+      const fadedPaintStyle      = { stroke: 'rgba(100, 116, 139, 0.2)', strokeWidth: 2 };
+      const fadedEndpointStyle   = { fill: 'rgba(100, 116, 139, 0.2)' };
 
-      // jsPlumb Instance: FIX set Container to the inner canvas
+      // jsPlumb Instance
       const jsPlumbInstance = jsPlumb.getInstance({
-        Container: canvas, // FIX
+        Container: canvas,
         Connector: ['Bezier', { curviness: 50 }],
-        PaintStyle: { stroke: '#64748b', strokeWidth: 2 },
+        PaintStyle: defaultPaintStyle,
         Endpoint: ['Dot', { radius: 5 }],
-        EndpointStyle: { fill: '#64748b' },
+        EndpointStyle: defaultEndpointStyle,
         HoverPaintStyle: { stroke: '#4f46e5', strokeWidth: 3 },
         EndpointHoverStyle: { fill: '#4f46e5' }
       });
@@ -388,6 +397,54 @@
 
       document.getElementById('cancelAddColumnBtn').addEventListener('click', () => addColumnModal.classList.add('hidden'));
       document.getElementById('addColumnForm').addEventListener('submit', handleSaveNewColumn);
+      
+      canvas.addEventListener('click', (e) => {
+        if (e.target === canvas) {
+            handleDatasetSelection(null); // Deselect if canvas is clicked
+        }
+      });
+
+      // --- Selection and Highlighting ---
+      function handleDatasetSelection(datasetName) {
+        // If the same dataset is clicked again, or if null is passed, deselect everything
+        if (selectedDataset === datasetName || datasetName === null) {
+            selectedDataset = null;
+        } else {
+            selectedDataset = datasetName;
+        }
+
+        // Update visual state of datasets
+        document.querySelectorAll('.dataset').forEach(el => {
+            if (el.id === `ds-${selectedDataset}`) {
+                el.classList.add('selected');
+            } else {
+                el.classList.remove('selected');
+            }
+        });
+
+        // Update visual state of connections
+        const allConnections = jsPlumbInstance.getConnections();
+        allConnections.forEach(conn => {
+            if (selectedDataset === null) {
+                // If nothing is selected, reset all to default
+                conn.setPaintStyle(defaultPaintStyle);
+                conn.endpoints.forEach(ep => ep.setPaintStyle(defaultEndpointStyle));
+            } else {
+                const isSource = conn.sourceId.startsWith(`ds-${selectedDataset}-`);
+                const isTarget = conn.targetId.startsWith(`ds-${selectedDataset}-`);
+
+                if (isSource || isTarget) {
+                    // This connection is related, make it opaque
+                    conn.setPaintStyle(defaultPaintStyle);
+                    conn.endpoints.forEach(ep => ep.setPaintStyle(defaultEndpointStyle));
+                } else {
+                    // This connection is not related, make it transparent
+                    conn.setPaintStyle(fadedPaintStyle);
+                    conn.endpoints.forEach(ep => ep.setPaintStyle(fadedEndpointStyle));
+                }
+            }
+        });
+      }
 
       // --- Modal Functions ---
       function openAddAdamModal() {
@@ -490,7 +547,6 @@
       }
 
       // --- Dataset Creation & Deletion ---
-      // FIX: allow optional position restore
       function createDataset(name, type, columns, position = null) {
         if (datasets[name]) { alert(`Dataset ${name} already exists on the desktop.`); return; }
 
@@ -500,7 +556,6 @@
         datasetEl.id = datasetId;
         datasetEl.className = 'dataset';
 
-        // Default grid layout if no saved position
         const leftPos = position?.left ?? (((datasetCounter - 1) % 4) * 320 + 20);
         const topPos  = position?.top  ?? (20 + Math.floor((datasetCounter - 1) / 4) * 600);
         datasetEl.style.left = `${leftPos}px`;
@@ -519,14 +574,15 @@
         `;
 
         const body = datasetEl.querySelector('.dataset-body');
-
-        // FIX: append to CANVAS (jsPlumb container), not desktop
         canvas.appendChild(datasetEl);
 
-        // Add columns + endpoints
         columns.forEach(col => appendColumnToBody(body, datasetId, col, type));
-
         datasets[name] = { id: datasetId, name, type, columns, position: { left: leftPos, top: topPos } };
+
+        datasetEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            handleDatasetSelection(name);
+        });
 
         datasetEl.querySelector('.delete-ds').addEventListener('click', (e) => {
           e.stopPropagation();
@@ -537,13 +593,11 @@
           openAddColumnModal(name);
         });
 
-        // Draggable within canvas
         jsPlumbInstance.draggable(datasetEl, {
-          containment: 'parent', // the canvas
+          containment: 'parent',
           grid: [10, 10],
           drag: () => jsPlumbInstance.repaintEverything(),
           stop: (params) => {
-            // FIX: persist position for YAML
             const el = params.el || datasetEl;
             const left = parseFloat(el.style.left) || el.offsetLeft;
             const top  = parseFloat(el.style.top)  || el.offsetTop;
@@ -570,18 +624,21 @@
         bodyEl.appendChild(colEl);
 
         if (type === 'ADaM') {
-          colEl.addEventListener('click', () => openDerivationModal(datasetId.substring(3), col.name));
+          colEl.addEventListener('click', (e) => {
+              e.stopPropagation(); // prevent dataset selection when clicking a column
+              openDerivationModal(datasetId.substring(3), col.name)
+          });
+          jsPlumbInstance.addEndpoint(colEl.id, {
+            uuid: colEl.id + "-target", anchor: "Left", isTarget: true, maxConnections: -1
+          });
+          jsPlumbInstance.addEndpoint(colEl.id, {
+            uuid: colEl.id + "-source", anchor: "Right", isSource: true, maxConnections: -1
+          });
+        } else { // SDTM
+          jsPlumbInstance.addEndpoint(colEl.id, {
+            uuid: colEl.id, anchor: "Right", isSource: true, isTarget: false, maxConnections: -1
+          });
         }
-
-        // FIX: give each endpoint a stable UUID equal to the element id
-        const anchor = type === 'SDTM' ? 'Right' : 'Left';
-        jsPlumbInstance.addEndpoint(colEl.id, {
-          uuid: colEl.id,              // FIX: stable UUID
-          anchor: anchor,
-          isSource: type === 'SDTM',
-          isTarget: type === 'ADaM',
-          maxConnections: -1
-        });
       }
 
       function deleteDataset(name) {
@@ -589,12 +646,13 @@
         const dataset = datasets[name];
         if (!dataset) return;
 
+        if (selectedDataset === name) handleDatasetSelection(null);
+
         const datasetEl = document.getElementById(dataset.id);
         if (datasetEl) jsPlumbInstance.remove(datasetEl);
 
         delete datasets[name];
 
-        // Drop connections touching this dataset
         Object.entries(connections).forEach(([cid, c]) => {
           if (c.source.dataset === name || c.target.dataset === name) delete connections[cid];
         });
@@ -648,7 +706,6 @@
               }
               return newCol;
             });
-            // FIX: persist pane position
             return { name: ds.name, type: ds.type, position: ds.position, columns: columns };
           })
         };
@@ -663,6 +720,7 @@
       }
 
       function clearBoard() {
+        handleDatasetSelection(null);
         Object.keys(datasets).forEach(name => {
           const el = document.getElementById(datasets[name].id);
           if (el) jsPlumbInstance.remove(el);
@@ -683,9 +741,7 @@
 
           clearBoard();
 
-          // FIX: batch operations for stable layout
           jsPlumbInstance.batch(() => {
-            // Pass 1: create datasets & columns (restore positions if present)
             spec.datasets.forEach(ds => {
               if (ds.type === 'ADaM') {
                 ds.columns.forEach(col => {
@@ -698,17 +754,21 @@
               createDataset(ds.name, ds.type, ds.columns, ds.position || null);
             });
 
-            // Pass 2: connect using UUIDs so anchors stay correct (Right/Left)
             spec.datasets.forEach(ds => {
               if (ds.type === 'ADaM') {
                 ds.columns.forEach(col => {
                   const sources = col.derivation?.sources || [];
                   sources.forEach(sourceStr => {
                     const [sourceDataset, sourceColumn] = sourceStr.split('.');
-                    const sourceUuid = `ds-${sourceDataset}-${sourceColumn}`;
-                    const targetUuid = `ds-${ds.name}-${col.name}`;
-                    // FIX: connect by uuids (uses the pre-existing endpoints at Right/Left)
-                    jsPlumbInstance.connect({ uuids: [sourceUuid, targetUuid] });
+                    const sourceDatasetObject = datasets[sourceDataset];
+                    const sourceUuidBase = `ds-${sourceDataset}-${sourceColumn}`;
+                    const targetUuidBase = `ds-${ds.name}-${col.name}`;
+
+                    if (sourceDatasetObject && sourceDatasetObject.type === 'ADaM') {
+                        jsPlumbInstance.connect({ uuids: [sourceUuidBase + "-source", targetUuidBase + "-target"] });
+                    } else { // SDTM source
+                        jsPlumbInstance.connect({ uuids: [sourceUuidBase, targetUuidBase + "-target"] });
+                    }
                   });
                 });
               }
