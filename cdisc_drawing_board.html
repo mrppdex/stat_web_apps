@@ -11,59 +11,57 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --primary-color: #4f46e5;
-      --secondary-color: #f1f5f9;
-      --border-color: #e2e8f0;
-      --text-primary: #1e293b;
-      --text-secondary: #64748b;
+      --bg: #0f1117; 
+      --fg: #e6e6e6; 
+      --muted: #9aa4b2; 
+      --card: #151823; 
+      --accent: #8ab4f8;
+      --line: #6ee7b7; 
+      --line-intra: #f59e0b; 
+      --border: #23283a; 
+      --panel: #0b0d13;
+      --primary-color: #8ab4f8;
     }
     body {
       font-family: 'Inter', sans-serif;
-      background-color: var(--secondary-color);
-      color: var(--text-primary);
+      background-color: var(--bg);
+      color: var(--fg);
     }
 
-    /* Scrollable viewport */
     .desktop {
       width: 100%;
-      height: calc(100vh - 140px);
+      height: calc(100vh - 60px);
       position: relative;
-      overflow: auto; /* scrollable board */
-      background-color: var(--secondary-color);
+      overflow: auto;
+      background-color: var(--bg);
     }
 
-    /* FIX: big inner canvas that actually grows; jsPlumb container lives here */
     .canvas {
       position: relative;
-      width: 4000px;     /* tweak as you like */
-      height: 3000px;    /* tweak as you like */
-      background-image:
-        linear-gradient(rgba(0, 0, 0, 0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0, 0, 0, 0.03) 1px, transparent 1px);
+      width: 4000px;
+      height: 3000px;
+      background-image: radial-gradient(var(--border) 1px, transparent 0);
       background-size: 20px 20px;
     }
 
     .dataset {
       position: absolute;
-      background-color: white;
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+      background-color: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: 0 6px 20px rgba(0,0,0,.25);
       min-width: 300px;
       z-index: 10;
       transition: box-shadow 0.2s ease-in-out, border-color 0.2s ease-in-out;
     }
-    .dataset:hover {
-      box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.1);
-    }
     .dataset.selected {
       border-color: var(--primary-color);
-      box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.3), 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.1);
+      box-shadow: 0 0 0 3px rgba(138, 180, 248, 0.3);
     }
     .dataset-header {
       padding: 12px 16px;
       font-weight: 600;
-      border-bottom: 1px solid var(--border-color);
+      border-bottom: 1px solid var(--border);
       cursor: move;
       display: flex;
       justify-content: space-between;
@@ -71,35 +69,43 @@
     }
     .dataset-header-title {
         flex-grow: 1;
+        color: #cbd5e1;
     }
     .dataset-header-actions {
         display: flex;
         align-items: center;
+        gap: 4px;
     }
     .dataset-body { padding: 8px; }
     .column {
       display: flex;
       align-items: center;
       padding: 8px;
-      border-radius: 4px;
+      border-radius: 10px;
       margin-bottom: 4px;
       position: relative;
+      background: #0f1322;
+      border: 1px solid var(--border);
     }
     .adam-column { cursor: pointer; }
-    .adam-column:hover { background-color: #fafafa; }
-    .column.key-column { background-color: #eef2ff; }
+    .adam-column:hover { background-color: #1a1e2d; }
+    .column.key-column { background-color: rgba(138, 180, 248, 0.1); }
     .column-name { font-weight: 500; flex-grow: 1; }
     .jtk-connector { z-index: 11; transition: opacity 0.3s ease-in-out; }
     .jtk-endpoint { z-index: 12; transition: opacity 0.3s ease-in-out; }
+    .jtk-connector.intra-dataset-connector path { stroke: var(--line-intra); stroke-dasharray: 6 4; }
 
     .modal {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0,0,0,0.5);
+      background: rgba(0,0,0,0.7);
       display: flex; align-items: center; justify-content: center;
       z-index: 1000;
     }
     .modal-content {
-      background: white; padding: 24px; border-radius: 8px;
+      background: var(--card); 
+      padding: 24px; 
+      border-radius: 14px;
+      border: 1px solid var(--border);
       width: 90%; max-width: 700px;
     }
     .icon-btn {
@@ -111,22 +117,46 @@
         display: flex;
         align-items: center;
         justify-content: center;
+        color: var(--muted);
     }
     .icon-btn:hover {
-        background-color: rgba(0,0,0,0.05);
+        background-color: rgba(255,255,255,0.05);
+        color: var(--fg);
+    }
+    header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+    }
+    .header-btn {
+      background-color: #334155;
+      color: #e2e8f0;
+    }
+    .header-btn:hover {
+       background-color: #475569;
+    }
+    input, select, textarea {
+        background-color: #0f1322;
+        border: 1px solid var(--border);
+        color: var(--fg);
+        border-radius: 8px;
+    }
+    input:focus, select:focus, textarea:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px rgba(138, 180, 248, 0.3);
     }
   </style>
 </head>
 <body class="bg-slate-100">
 
   <!-- Header -->
-  <header class="bg-white shadow-sm p-4 flex justify-between items-center">
-    <h1 class="text-2xl font-bold text-slate-800">CDISC SDTM to ADaM Mapping Tool</h1>
+  <header class="p-4 flex justify-between items-center">
+    <h1 class="text-xl font-bold text-slate-300">CDISC SDTM to ADaM Mapping Tool</h1>
     <div class="flex items-center space-x-2">
-      <button id="loadSpecBtn" class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-colors">Load Spec</button>
-      <button id="addSdtmBtn" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors">Add SDTM Domain</button>
-      <button id="addAdamBtn" class="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors">Add ADaM Dataset</button>
-      <button id="viewSpecBtn" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors">View Spec (YAML)</button>
+      <button id="loadSpecBtn" class="header-btn px-4 py-2 rounded-md transition-colors">Load Spec</button>
+      <button id="addSdtmBtn" class="header-btn px-4 py-2 rounded-md transition-colors">Add SDTM Domain</button>
+      <button id="addAdamBtn" class="header-btn px-4 py-2 rounded-md transition-colors">Add ADaM Dataset</button>
+      <button id="viewSpecBtn" class="header-btn px-4 py-2 rounded-md transition-colors">View Spec (YAML)</button>
     </div>
   </header>
 
@@ -141,25 +171,25 @@
       <h2 class="text-xl font-bold mb-4">Select SDTM Domain</h2>
       <form id="sdtmSelectionForm">
         <div class="mb-4">
-          <label for="sdtmDomainSelect" class="block text-sm font-medium text-gray-700">Domain</label>
-          <select id="sdtmDomainSelect" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"></select>
+          <label for="sdtmDomainSelect" class="block text-sm font-medium text-gray-400">Domain</label>
+          <select id="sdtmDomainSelect" class="mt-1 block w-full pl-3 pr-10 py-2 text-base focus:outline-none sm:text-sm rounded-md"></select>
         </div>
         <div class="mb-4">
-          <label class="block text-sm font-medium text-gray-700">Column Options</label>
+          <label class="block text-sm font-medium text-gray-400">Column Options</label>
           <div class="mt-2 space-y-2">
             <div class="flex items-center">
               <input id="colOptAll" name="columnOption" type="radio" value="all" class="h-4 w-4 text-indigo-600 border-gray-300" checked>
-              <label for="colOptAll" class="ml-3 block text-sm font-medium text-gray-700">All Columns (Required + Permissible)</label>
+              <label for="colOptAll" class="ml-3 block text-sm font-medium text-gray-300">All Columns (Required + Permissible)</label>
             </div>
             <div class="flex items-center">
               <input id="colOptReq" name="columnOption" type="radio" value="required" class="h-4 w-4 text-indigo-600 border-gray-300">
-              <label for="colOptReq" class="ml-3 block text-sm font-medium text-gray-700">Required Columns Only</label>
+              <label for="colOptReq" class="ml-3 block text-sm font-medium text-gray-300">Required Columns Only</label>
             </div>
           </div>
         </div>
         <div class="mt-6 flex justify-end space-x-2">
-          <button type="button" id="cancelSdtmSelectBtn" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300">Cancel</button>
-          <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">Add Domain</button>
+          <button type="button" id="cancelSdtmSelectBtn" class="bg-gray-600 text-gray-200 px-4 py-2 rounded-md hover:bg-gray-500">Cancel</button>
+          <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">Add Domain</button>
         </div>
       </form>
     </div>
@@ -171,17 +201,17 @@
       <h2 id="modalTitle" class="text-xl font-bold mb-4">Add New ADaM Dataset</h2>
       <form id="addDatasetForm">
         <div class="mb-4">
-          <label for="datasetName" class="block text-sm font-medium text-gray-700">Dataset Name</label>
-          <input type="text" id="datasetName" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" required>
+          <label for="datasetName" class="block text-sm font-medium text-gray-400">Dataset Name</label>
+          <input type="text" id="datasetName" class="mt-1 block w-full px-3 py-2" required>
         </div>
         <h3 class="text-lg font-semibold mb-2">Columns</h3>
         <div id="columnsContainer" class="space-y-2 max-h-60 overflow-y-auto pr-2"></div>
         <div class="mt-4 flex justify-end">
-          <button type="button" id="addColumnBtn" class="text-sm text-indigo-600 hover:text-indigo-800">+ Add Custom Column</button>
+          <button type="button" id="addColumnBtn" class="text-sm text-blue-400 hover:text-blue-300">+ Add Custom Column</button>
         </div>
         <div class="mt-6 flex justify-end space-x-2">
-          <button type="button" id="cancelBtn" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300">Cancel</button>
-          <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">Create Dataset</button>
+          <button type="button" id="cancelBtn" class="bg-gray-600 text-gray-200 px-4 py-2 rounded-md hover:bg-gray-500">Cancel</button>
+          <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">Create Dataset</button>
         </div>
       </form>
     </div>
@@ -195,18 +225,18 @@
             <input type="hidden" id="editDatasetName">
             <div class="space-y-4">
                 <div>
-                    <label for="editDatasetJoinKeys" class="block text-sm font-medium text-gray-700">Join Keys</label>
-                    <input type="text" id="editDatasetJoinKeys" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm" placeholder="STUDYID, USUBJID">
+                    <label for="editDatasetJoinKeys" class="block text-sm font-medium text-gray-400">Join Keys</label>
+                    <input type="text" id="editDatasetJoinKeys" class="mt-1 block w-full px-3 py-2" placeholder="STUDYID, USUBJID">
                     <p class="mt-1 text-xs text-gray-500">Comma-separated list of columns to use when joining source datasets.</p>
                 </div>
                 <div class="flex items-center pt-2">
                     <input type="checkbox" id="editDatasetOneRow" class="h-4 w-4 text-indigo-600 border-gray-300 rounded">
-                    <label for="editDatasetOneRow" class="ml-2 block text-sm text-gray-900">One row per subject</label>
+                    <label for="editDatasetOneRow" class="ml-2 block text-sm text-gray-300">One row per subject</label>
                 </div>
             </div>
             <div class="mt-6 flex justify-end space-x-2">
-                <button type="button" id="cancelEditDatasetBtn" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md">Cancel</button>
-                <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-md">Save Settings</button>
+                <button type="button" id="cancelEditDatasetBtn" class="bg-gray-600 text-gray-200 px-4 py-2 rounded-md">Cancel</button>
+                <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-md">Save Settings</button>
             </div>
         </form>
     </div>
@@ -221,21 +251,21 @@
         <input type="hidden" id="addColumnDatasetName">
         <div class="space-y-4">
           <div>
-            <label for="newColName" class="block text-sm font-medium text-gray-700">Column Name</label>
-            <input type="text" id="newColName" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm" required>
+            <label for="newColName" class="block text-sm font-medium text-gray-400">Column Name</label>
+            <input type="text" id="newColName" class="mt-1 block w-full px-3 py-2" required>
           </div>
           <div>
-            <label for="newColDesc" class="block text-sm font-medium text-gray-700">Description</label>
-            <input type="text" id="newColDesc" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm">
+            <label for="newColDesc" class="block text-sm font-medium text-gray-400">Description</label>
+            <input type="text" id="newColDesc" class="mt-1 block w-full px-3 py-2">
           </div>
           <div class="flex items-center">
             <input type="checkbox" id="newColKey" class="h-4 w-4 text-indigo-600 border-gray-300 rounded">
-            <label for="newColKey" class="ml-2 block text-sm text-gray-900">Is Key Column</label>
+            <label for="newColKey" class="ml-2 block text-sm text-gray-300">Is Key Column</label>
           </div>
         </div>
         <div class="mt-6 flex justify-end space-x-2">
-          <button type="button" id="cancelAddColumnBtn" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300">Cancel</button>
-          <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">Add Column</button>
+          <button type="button" id="cancelAddColumnBtn" class="bg-gray-600 text-gray-200 px-4 py-2 rounded-md">Cancel</button>
+          <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-md">Add Column</button>
         </div>
       </form>
     </div>
@@ -248,20 +278,20 @@
       <input type="hidden" id="derivationDatasetName">
       <input type="hidden" id="derivationColumnName">
       <div class="mb-4">
-        <label class="block text-sm font-medium text-gray-700">Source Columns</label>
-        <div id="derivationSourceColumns" class="mt-1 p-2 bg-gray-50 border rounded-md text-sm text-gray-600 min-h-[40px]"></div>
+        <label class="block text-sm font-medium text-gray-400">Source Columns</label>
+        <div id="derivationSourceColumns" class="mt-1 p-2 bg-gray-800 border-gray-600 border rounded-md text-sm text-gray-400 min-h-[40px]"></div>
       </div>
       <div class="mb-4">
-        <label for="derivationDescription" class="block text-sm font-medium text-gray-700">Description</label>
+        <label for="derivationDescription" class="block text-sm font-medium text-gray-400">Description</label>
         <textarea id="derivationDescription" rows="3" class="mt-1 block w-full rounded-md"></textarea>
       </div>
       <div class="mb-4">
-        <label for="derivationLogic" class="block text-sm font-medium text-gray-700">Derivation Logic</label>
+        <label for="derivationLogic" class="block text-sm font-medium text-gray-400">Derivation Logic</label>
         <textarea id="derivationLogic" rows="5" class="mt-1 block w-full font-mono"></textarea>
       </div>
       <div class="mt-6 flex justify-end space-x-2">
-        <button type="button" id="cancelDerivationBtn" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md">Cancel</button>
-        <button type="button" id="saveDerivationBtn" class="bg-indigo-600 text-white px-4 py-2 rounded-md">Save</button>
+        <button type="button" id="cancelDerivationBtn" class="bg-gray-600 text-gray-200 px-4 py-2 rounded-md">Cancel</button>
+        <button type="button" id="saveDerivationBtn" class="bg-blue-600 text-white px-4 py-2 rounded-md">Save</button>
       </div>
     </div>
   </div>
@@ -270,9 +300,9 @@
   <div id="specModal" class="modal hidden">
     <div class="modal-content">
       <h2 class="text-xl font-bold mb-4">Specification (YAML)</h2>
-      <textarea id="specOutput" readonly class="w-full h-80 p-2 border rounded-md font-mono text-sm bg-gray-50"></textarea>
+      <textarea id="specOutput" readonly class="w-full h-80 p-2 rounded-md font-mono text-sm"></textarea>
       <div class="mt-4 flex justify-end">
-        <button id="closeSpecBtn" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md">Close</button>
+        <button id="closeSpecBtn" class="bg-gray-600 text-gray-200 px-4 py-2 rounded-md">Close</button>
       </div>
     </div>
   </div>
@@ -282,10 +312,10 @@
     <div class="modal-content">
       <h2 class="text-xl font-bold mb-4">Load Specification from YAML</h2>
       <form id="loadSpecForm">
-        <textarea id="specInput" placeholder="Paste your YAML specification here..." class="w-full h-80 p-2 border rounded-md font-mono text-sm"></textarea>
+        <textarea id="specInput" placeholder="Paste your YAML specification here..." class="w-full h-80 p-2 rounded-md font-mono text-sm"></textarea>
         <div class="mt-4 flex justify-end space-x-2">
-          <button type="button" id="cancelLoadSpecBtn" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md">Cancel</button>
-          <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-md">Load</button>
+          <button type="button" id="cancelLoadSpecBtn" class="bg-gray-600 text-gray-200 px-4 py-2 rounded-md">Cancel</button>
+          <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-md">Load</button>
         </div>
       </form>
     </div>
@@ -389,10 +419,10 @@
         ]}
       };
       
-      const defaultPaintStyle    = { stroke: '#64748b', strokeWidth: 2 };
-      const defaultEndpointStyle = { fill: '#64748b' };
-      const fadedPaintStyle      = { stroke: 'rgba(100, 116, 139, 0.2)', strokeWidth: 2 };
-      const fadedEndpointStyle   = { fill: 'rgba(100, 116, 139, 0.2)' };
+      const defaultPaintStyle    = { stroke: 'var(--line)', strokeWidth: 2 };
+      const defaultEndpointStyle = { fill: 'var(--accent)' };
+      const fadedPaintStyle      = { stroke: 'rgba(110, 231, 183, 0.2)', strokeWidth: 2 };
+      const fadedEndpointStyle   = { fill: 'rgba(138, 180, 248, 0.2)' };
 
       // jsPlumb Instance
       const jsPlumbInstance = jsPlumb.getInstance({
@@ -401,8 +431,8 @@
         PaintStyle: defaultPaintStyle,
         Endpoint: ['Dot', { radius: 5 }],
         EndpointStyle: defaultEndpointStyle,
-        HoverPaintStyle: { stroke: '#4f46e5', strokeWidth: 3 },
-        EndpointHoverStyle: { fill: '#4f46e5' }
+        HoverPaintStyle: { stroke: '#8ab4f8', strokeWidth: 3 },
+        EndpointHoverStyle: { fill: '#8ab4f8' }
       });
 
       // Safety: keep lines fresh on viewport changes
@@ -475,9 +505,10 @@
                 conn.setPaintStyle(defaultPaintStyle);
                 conn.endpoints.forEach(ep => ep.setPaintStyle(defaultEndpointStyle));
             } else {
-                const isSource = conn.sourceId.startsWith(`ds-${selectedDataset}-`);
-                const isTarget = conn.targetId.startsWith(`ds-${selectedDataset}-`);
-                if (isSource || isTarget) {
+                const sourceName = conn.source.parentElement.parentElement.dataset.name;
+                const targetName = conn.target.parentElement.parentElement.dataset.name;
+
+                if (sourceName === selectedDataset || targetName === selectedDataset) {
                     conn.setPaintStyle(defaultPaintStyle);
                     conn.endpoints.forEach(ep => ep.setPaintStyle(defaultEndpointStyle));
                 } else {
@@ -502,10 +533,10 @@
         const div = document.createElement('div');
         div.className = 'flex items-center space-x-2';
         div.innerHTML = `
-          <input type="text" placeholder="Name" value="${col.name}" class="flex-1 block w-full px-2 py-1 bg-white border border-gray-300 rounded-md shadow-sm text-sm" required>
-          <input type="text" placeholder="Description" value="${col.desc}" class="flex-1 block w-full px-2 py-1 bg-white border border-gray-300 rounded-md shadow-sm text-sm">
-          <label class="flex items-center text-sm"><input type="checkbox" ${col.key ? 'checked' : ''} class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 mr-1">Key</label>
-          <button type="button" class="text-red-500 hover:text-red-700">&times;</button>
+          <input type="text" placeholder="Name" value="${col.name}" class="flex-1 block w-full px-2 py-1 text-sm" required>
+          <input type="text" placeholder="Description" value="${col.desc}" class="flex-1 block w-full px-2 py-1 text-sm">
+          <label class="flex items-center text-sm text-gray-300"><input type="checkbox" ${col.key ? 'checked' : ''} class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 mr-1">Key</label>
+          <button type="button" class="text-red-500 hover:text-red-400">&times;</button>
         `;
         div.querySelector('button').addEventListener('click', () => div.remove());
         container.appendChild(div);
@@ -617,13 +648,14 @@
         const datasetEl = document.createElement('div');
         datasetEl.id = datasetId;
         datasetEl.className = 'dataset';
+        datasetEl.dataset.name = name;
 
         const leftPos = position?.left ?? (((datasetCounter - 1) % 4) * 320 + 20);
         const topPos  = position?.top  ?? (20 + Math.floor((datasetCounter - 1) / 4) * 600);
         datasetEl.style.left = `${leftPos}px`;
         datasetEl.style.top  = `${topPos}px`;
 
-        const headerColor = type === 'SDTM' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800';
+        const headerColor = type === 'SDTM' ? 'bg-blue-900 bg-opacity-30 text-blue-300' : 'bg-purple-900 bg-opacity-30 text-purple-300';
         datasetEl.innerHTML = `
           <div class="dataset-header ${headerColor}">
             <span class="dataset-header-title font-bold">${name} (${type})</span>
@@ -648,7 +680,7 @@
         const body = datasetEl.querySelector('.dataset-body');
         canvas.appendChild(datasetEl);
 
-        columns.forEach(col => appendColumnToBody(body, datasetId, col, type));
+        columns.forEach(col => appendColumnToBody(body, datasetEl, col, type));
         datasets[name] = { id: datasetId, name, type, columns, joinKeys, oneRowPerSubject, position: { left: leftPos, top: topPos } };
 
         datasetEl.addEventListener('click', (e) => { e.stopPropagation(); handleDatasetSelection(name); });
@@ -673,7 +705,7 @@
         });
       }
 
-      function appendColumnToBody(bodyEl, datasetId, col, type) {
+      function appendColumnToBody(bodyEl, datasetEl, col, type) {
         const colEl = document.createElement('div');
         let classList = `column ${col.key ? 'key-column' : ''}`;
         if (type === 'ADaM') {
@@ -682,7 +714,7 @@
           col.derivationLogic = col.derivationLogic || '';
         }
         colEl.className = classList;
-        colEl.id = `${datasetId}-${col.name}`;
+        colEl.id = `${datasetEl.id}-${col.name}`;
         colEl.innerHTML = `
           <span class="column-name">${col.name}</span>
           <span class="text-xs text-gray-500 truncate ml-2">${col.desc || ''}</span>
@@ -692,12 +724,12 @@
         if (type === 'ADaM') {
           colEl.addEventListener('click', (e) => {
               e.stopPropagation();
-              openDerivationModal(datasetId.substring(3), col.name)
+              openDerivationModal(datasetEl.dataset.name, col.name)
           });
-          jsPlumbInstance.addEndpoint(colEl.id, { uuid: colEl.id + "-target", anchor: "Left", isTarget: true, maxConnections: -1 });
-          jsPlumbInstance.addEndpoint(colEl.id, { uuid: colEl.id + "-source", anchor: "Right", isSource: true, maxConnections: -1 });
+          jsPlumbInstance.addEndpoint(colEl, { uuid: colEl.id + "-target", anchor: "Left", isTarget: true, maxConnections: -1 });
+          jsPlumbInstance.addEndpoint(colEl, { uuid: colEl.id + "-source", anchor: "Right", isSource: true, maxConnections: -1 });
         } else { // SDTM
-          jsPlumbInstance.addEndpoint(colEl.id, { uuid: colEl.id, anchor: "Right", isSource: true, isTarget: false, maxConnections: -1 });
+          jsPlumbInstance.addEndpoint(colEl, { uuid: colEl.id, anchor: "Right", isSource: true, isTarget: false, maxConnections: -1 });
         }
       }
 
@@ -716,11 +748,16 @@
       // --- jsPlumb connection bookkeeping ---
       jsPlumbInstance.bind('connection', (info) => {
         const connId = info.connection.id;
-        const [ , srcDs, ...srcColParts] = info.sourceId.split('-');
-        const [ , tgtDs, ...tgtColParts] = info.targetId.split('-');
+        const sourceName = info.source.parentElement.parentElement.dataset.name;
+        const targetName = info.target.parentElement.parentElement.dataset.name;
+
+        if (sourceName === targetName) {
+            info.connection.addClass("intra-dataset-connector");
+        }
+
         connections[connId] = {
-          source: { dataset: srcDs, column: srcColParts.join('-') },
-          target: { dataset: tgtDs, column: tgtColParts.join('-') }
+          source: { dataset: sourceName, column: info.source.dataset.col },
+          target: { dataset: targetName, column: info.target.dataset.col }
         };
       });
 
@@ -814,12 +851,15 @@
                   const sourceDsObj = datasets[sourceDataset];
                   if (!sourceDsObj) return;
 
-                  const sourceUuidBase = `ds-${sourceDataset}-${sourceColumn}`;
-                  const targetUuidBase = `ds-${ds.name}-${col.name}`;
-                  const sourceUuid = sourceDsObj.type === 'ADaM' ? `${sourceUuidBase}-source` : sourceUuidBase;
-                  const targetUuid = `${targetUuidBase}-target`;
+                  const sourceId = `ds-${sourceDataset}-${sourceColumn}`;
+                  const targetId = `ds-${ds.name}-${col.name}`;
+                  
+                  const sourceEndpointUuid = sourceDsObj.type === 'ADaM' ? `${sourceId}-source` : sourceId;
+                  const targetEndpointUuid = `${targetId}-target`;
 
-                  jsPlumbInstance.connect({ uuids: [sourceUuid, targetUuid] });
+                  jsPlumbInstance.connect({ 
+                      uuids: [sourceEndpointUuid, targetEndpointUuid] 
+                  });
                 });
               });
             });
