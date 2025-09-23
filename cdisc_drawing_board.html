@@ -633,7 +633,7 @@
         dataset.columns.push(newCol);
         const datasetEl = document.getElementById(dataset.id);
         const body = datasetEl.querySelector('.dataset-body');
-        appendColumnToBody(body, dataset.id, newCol, dataset.type);
+        appendColumnToBody(body, datasetEl, newCol, dataset.type);
         jsPlumbInstance.revalidate(dataset.id);
         addColumnModal.classList.add('hidden');
       }
@@ -715,6 +715,7 @@
         }
         colEl.className = classList;
         colEl.id = `${datasetEl.id}-${col.name}`;
+        colEl.dataset.col = col.name;
         colEl.innerHTML = `
           <span class="column-name">${col.name}</span>
           <span class="text-xs text-gray-500 truncate ml-2">${col.desc || ''}</span>
@@ -875,4 +876,5 @@
   </script>
 </body>
 </html>
+
 
