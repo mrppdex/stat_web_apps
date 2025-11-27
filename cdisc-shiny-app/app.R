@@ -10,6 +10,9 @@ source("generate_adam_shiny.R")
 source("generate_excel_spec.R")
 source("generate_prompt.R")
 
+# Increase max upload size to 100MB
+options(shiny.maxRequestSize = 100 * 1024^2)
+
 ui <- fluidPage(
   theme = shinytheme("flatly"),
   titlePanel("CDISC ADaM Generator"),
@@ -425,7 +428,8 @@ server <- function(input, output, session) {
       ),
       if (ds$type == "ADaM") {
         fluidRow(
-          column(12, textInput("exp_ds_join_keys", "Join Keys (comma separated)", value = paste(ds$join_keys, collapse = ", ")))
+          column(6, textInput("exp_ds_join_keys", "Join Keys (comma-separated)", value = paste(ds$join_keys, collapse = ", "))),
+          column(6, textInput("exp_ds_group_keys", "Group By Keys (comma-separated)", value = paste(ds$group_keys, collapse = ", ")))
         )
       },
       hr(),
@@ -443,6 +447,8 @@ server <- function(input, output, session) {
   # Render Columns Table
   output$exp_columns_table <- renderDT({
     req(rv$spec, rv_explorer$selected_ds)
+
+    # Find dataset
     ds <- NULL
     for (d in rv$spec$datasets) {
       if (d$name == rv_explorer$selected_ds) {
@@ -450,6 +456,7 @@ server <- function(input, output, session) {
         break
       }
     }
+
     if (is.null(ds)) {
       return(NULL)
     }
@@ -458,33 +465,47 @@ server <- function(input, output, session) {
     cols_df <- data.frame(
       Name = sapply(ds$columns, function(x) x$name),
       Label = sapply(ds$columns, function(x) ifelse(is.null(x$label), "", x$label)),
-      Type = sapply(ds$columns, function(x) ifelse(is.null(x$type), "", x$type)),
-      Derivation = sapply(ds$columns, function(x) ifelse(is.null(x$derivation$logic), "", x$derivation$logic)),
+      Type = sapply(ds$columns, function(x) x$type),
+      Logic = sapply(ds$columns, function(x) ifelse(is.null(x$derivation$logic), "", x$derivation$logic)),
       stringsAsFactors = FALSE
     )
 
-    datatable(cols_df, selection = "single", options = list(pageLength = 5, dom = "tp"))
+    datatable(cols_df, selection = "single", options = list(dom = "t", pageLength = 100))
   })
 
-  # Save Changes (Dataset Metadata)
+  # Save Dataset Changes
   observeEvent(input$save_ds_changes, {
     req(rv$spec, rv_explorer$selected_ds)
 
     # Update spec
-    new_spec <- rv$spec
-    for (i in seq_along(new_spec$datasets)) {
-      if (new_spec$datasets[[i]]$name == rv_explorer$selected_ds) {
-        # Update metadata
-        new_spec$datasets[[i]]$name <- input$exp_ds_name
-        new_spec$datasets[[i]]$type <- input$exp_ds_type
+    for (i in seq_along(rv$spec$datasets)) {
+      if (rv$spec$datasets[[i]]$name == rv_explorer$selected_ds) {
+        rv$spec$datasets[[i]]$name <- input$exp_ds_name
+        rv$spec$datasets[[i]]$type <- input$exp_ds_type
+
         if (input$exp_ds_type == "ADaM") {
-          new_spec$datasets[[i]]$one_row_per_subject <- input$exp_ds_one_row
+          rv$spec$datasets[[i]]$one_row_per_subject <- input$exp_ds_one_row
+
           # Parse join keys
           keys <- trimws(strsplit(input$exp_ds_join_keys, ",")[[1]])
-          new_spec$datasets[[i]]$join_keys <- keys[keys != ""]
+          keys <- keys[keys != ""]
+          if (length(keys) > 0) {
+            rv$spec$datasets[[i]]$join_keys <- as.list(keys)
+          } else {
+            rv$spec$datasets[[i]]$join_keys <- NULL
+          }
+
+          # Parse group keys
+          g_keys <- trimws(strsplit(input$exp_ds_group_keys, ",")[[1]])
+          g_keys <- g_keys[g_keys != ""]
+          if (length(g_keys) > 0) {
+            rv$spec$datasets[[i]]$group_keys <- as.list(g_keys)
+          } else {
+            rv$spec$datasets[[i]]$group_keys <- NULL
+          }
         }
 
-        # Update selection if name changed
+        # Update selected ds name if changed
         if (rv_explorer$selected_ds != input$exp_ds_name) {
           rv_explorer$selected_ds <- input$exp_ds_name
         }
@@ -492,8 +513,6 @@ server <- function(input, output, session) {
       }
     }
 
-    rv$spec <- new_spec
-    # Update text area
     updateTextAreaInput(session, "spec_text", value = yaml::as.yaml(rv$spec))
     add_log(paste("Updated dataset:", input$exp_ds_name))
     update_diagram()
