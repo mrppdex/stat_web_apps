@@ -1,0 +1,161 @@
+datasets:
+  - name: DM
+    type: SDTM
+    columns:
+      - name: STUDYID
+        key: true
+      - name: USUBJID
+        key: true
+      - name: SUBJID
+      - name: RFSTDTC
+      - name: RFENDTC
+      - name: SITEID
+      - name: AGE
+      - name: SEX
+      - name: RACE
+      - name: ARM
+      - name: ACTARM
+      - name: DMDTC
+
+  - name: AE
+    type: SDTM
+    columns:
+      - name: STUDYID
+        key: true
+      - name: USUBJID
+        key: true
+      - name: AESEQ
+        key: true
+      - name: AETERM
+      - name: AEDECOD
+      - name: AEBODSYS
+      - name: AESTDTC
+      - name: AEENDTC
+      - name: AESER
+
+  - name: DS
+    type: SDTM
+    columns:
+      - name: STUDYID
+        key: true
+      - name: USUBJID
+        key: true
+      - name: DSSEQ
+        key: true
+      - name: DSTERM
+      - name: DSDECOD
+      - name: DSCAT
+      - name: DSSTDTC
+
+  - name: LB
+    type: SDTM
+    columns:
+      - name: STUDYID
+        key: true
+      - name: USUBJID
+        key: true
+      - name: LBSEQ
+        key: true
+      - name: LBTESTCD
+      - name: LBTEST
+      - name: LBORRES
+      - name: LBORRESU
+      - name: LBSTRESC
+      - name: LBSTRESN
+      - name: LBSTRESU
+      - name: LBDTC
+
+  - name: EX
+    type: SDTM
+    columns:
+      - name: STUDYID
+        key: true
+      - name: USUBJID
+        key: true
+      - name: EXSEQ
+        key: true
+      - name: EXTRT
+      - name: EXDOSE
+      - name: EXDOSU
+      - name: EXSTDTC
+      - name: EXENDTC
+
+  - name: ADSL
+    type: ADaM
+    one_row_per_subject: true
+    join_keys: ["STUDYID", "USUBJID"]
+    columns:
+      - name: STUDYID
+        key: true
+        derivation:
+          logic: DM_STUDYID
+          sources: ["DM.STUDYID"]
+      - name: USUBJID
+        key: true
+        derivation:
+          logic: DM_USUBJID
+          sources: ["DM.USUBJID"]
+      - name: SUBJID
+        derivation:
+          logic: DM_SUBJID
+          sources: ["DM.SUBJID"]
+      - name: SITEID
+        derivation:
+          logic: DM_SITEID
+          sources: ["DM.SITEID"]
+      - name: AGE
+        derivation:
+          logic: DM_AGE
+          sources: ["DM.AGE"]
+      - name: SEX
+        derivation:
+          logic: DM_SEX
+          sources: ["DM.SEX"]
+      - name: RACE
+        derivation:
+          logic: DM_RACE
+          sources: ["DM.RACE"]
+      - name: TRTSDT
+        derivation:
+          logic: min(as.Date(EX_EXSTDTC), na.rm = TRUE)
+          sources: ["EX.EXSTDTC"]
+      - name: TRTEDT
+        derivation:
+          logic: max(as.Date(EX_EXENDTC), na.rm = TRUE)
+          sources: ["EX.EXENDTC"]
+
+  - name: ADAE
+    type: ADaM
+    join_keys: ["STUDYID", "USUBJID", "AESEQ"]
+    columns:
+      - name: STUDYID
+        key: true
+        derivation:
+          logic: ADSL_STUDYID
+          sources: ["ADSL.STUDYID"]
+      - name: USUBJID
+        key: true
+        derivation:
+          logic: ADSL_USUBJID
+          sources: ["ADSL.USUBJID"]
+      - name: AESEQ
+        key: true
+        derivation:
+          logic: AE_AESEQ
+          sources: ["AE.AESEQ"]
+      - name: AETERM
+        derivation:
+          logic: AE_AETERM
+          sources: ["AE.AETERM"]
+      - name: AEDECOD
+        derivation:
+          logic: AE_AEDECOD
+          sources: ["AE.AEDECOD"]
+      - name: TRTSDT
+        derivation:
+          logic: ADSL_TRTSDT
+          sources: ["ADSL.TRTSDT"]
+      - name: ASTDT
+        derivation:
+          logic: as.Date(AE_AESTDTC)
+          sources: ["AE.AESTDTC"]
