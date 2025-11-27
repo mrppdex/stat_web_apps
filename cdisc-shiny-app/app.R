@@ -7,6 +7,7 @@ library(readr)
 library(arrow)
 
 source("generate_adam_shiny.R")
+source("generate_excel_spec.R")
 
 ui <- fluidPage(
   theme = shinytheme("flatly"),
@@ -23,7 +24,9 @@ ui <- fluidPage(
       selectInput("output_format", "Output Format", choices = c("CSV", "Parquet", "RDS")),
       actionButton("generate_btn", "Generate ADaM Datasets", class = "btn-primary btn-block"),
       br(), br(),
-      downloadButton("download_btn", "Download Results (Zip)", class = "btn-success btn-block")
+      downloadButton("download_btn", "Download Results (Zip)", class = "btn-success btn-block"),
+      br(),
+      downloadButton("download_spec_btn", "Download Spec (Excel)", class = "btn-warning btn-block")
     ),
     mainPanel(
       tabsetPanel(
@@ -283,6 +286,18 @@ server <- function(input, output, session) {
       }
 
       zip(file, files, flags = "-j")
+    }
+  )
+
+  # Download Spec Handler
+  output$download_spec_btn <- downloadHandler(
+    filename = function() {
+      paste0("adam_spec_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".xlsx")
+    },
+    content = function(file) {
+      req(rv$spec)
+      wb <- generate_excel_spec(rv$spec)
+      saveWorkbook(wb, file, overwrite = TRUE)
     }
   )
 }
