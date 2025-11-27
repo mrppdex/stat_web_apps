@@ -174,13 +174,41 @@ function App() {
   };
 
   const handleExportSvg = () => {
+    if (nodes.length === 0) return;
+
+    // Calculate bounding box
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    nodes.forEach(node => {
+      minX = Math.min(minX, node.position.x);
+      minY = Math.min(minY, node.position.y);
+      // Assuming a default node width/height if not available, or estimating.
+      // DatasetNode is roughly 250px wide and variable height.
+      // Let's assume a safe bounding box.
+      // Ideally we should use getNodesBounds from reactflow if available or store dimensions.
+      // For now, let's estimate max extent based on node content or a fixed size.
+      // A safer bet is to use the viewport with a transform that covers everything.
+      maxX = Math.max(maxX, node.position.x + 300); // Estimate width
+      maxY = Math.max(maxY, node.position.y + (node.data.dataset.columns.length * 30 + 100)); // Estimate height
+    });
+
+    const width = maxX - minX + 100; // Padding
+    const height = maxY - minY + 100; // Padding
+
     const viewport = document.querySelector('.react-flow__viewport');
 
     if (viewport) {
       toSvg(viewport, {
         backgroundColor: '#0a0c10',
+        width: width,
+        height: height,
         style: {
-          transform: 'translate(0,0) scale(1)',
+          width: width,
+          height: height,
+          transform: `translate(${-minX + 50}px, ${-minY + 50}px) scale(1)`,
         }
       })
         .then((dataUrl) => {
