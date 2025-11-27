@@ -65,7 +65,7 @@ generate_llm_prompt <- function(sdtm_data, target_adams, complexity) {
     "- **Sources Field Rules**:\n",
     "  - List ONLY external datasets required for the derivation (e.g., `[DM.AGE]`).\n",
     "  - Do NOT include the current dataset or 'Unknown' in the sources list.\n",
-    "  - If a derivation only uses columns from the current dataset, leave `sources` empty or omit it.\n",
+    "  - **Intra-dataset References**: If a derivation uses a column created earlier in the SAME dataset (e.g., using `ASTDT` to derive `ASTDY`), do NOT list it in `sources`. The app handles internal dependencies automatically.\n",
     "- **Complexity Level**: ", complexity, "\n",
     "- **Instructions**: ", complexity_instr, "\n\n",
     "**Output Format**:\n",
