@@ -65,8 +65,23 @@ ui <- fluidPage(
             )
           ),
           hr(),
-          h5("Generated Prompt (Copy and Paste to LLM):"),
-          textAreaInput("llm_prompt_out", NULL, width = "100%", height = "400px")
+          div(
+            style = "display: flex; justify-content: space-between; align-items: center;",
+            h5("Generated Prompt (Copy and Paste to LLM):"),
+            actionButton("copy_btn", "Copy to Clipboard", icon = icon("copy"), class = "btn-sm btn-default")
+          ),
+          textAreaInput("llm_prompt_out", NULL, width = "100%", height = "400px"),
+          tags$script("
+            $(document).on('click', '#copy_btn', function() {
+              var copyText = document.getElementById('llm_prompt_out');
+              copyText.select();
+              navigator.clipboard.writeText(copyText.value).then(function() {
+                alert('Prompt copied to clipboard!');
+              }, function(err) {
+                console.error('Async: Could not copy text: ', err);
+              });
+            });
+          ")
         ),
         tabPanel(
           "Log",
