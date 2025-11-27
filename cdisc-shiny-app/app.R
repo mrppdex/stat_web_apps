@@ -35,7 +35,7 @@ ui <- fluidPage(
           "Visualization",
           div(
             style = "height: 600px; overflow: auto;",
-            DiagrammeROutput("diagram", height = "600px")
+            grVizOutput("diagram", height = "600px")
           )
         ),
         tabPanel(
