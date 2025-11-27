@@ -66,6 +66,7 @@ generate_llm_prompt <- function(sdtm_data, target_adams, complexity) {
     "  - List ALL datasets required for the derivation, including the current one if applicable.\n",
     "  - Format: `[DOMAIN.VARIABLE]` (e.g., `[DM.AGE]`, `[ADSL.TRTSDT]`).\n",
     "  - Do NOT include 'Unknown' in the sources list.\n",
+    "  - **Dependency Check**: If you reference a column from another ADaM dataset (e.g., `ADSL.ACTARM`), you MUST ensure that column (`ACTARM`) is explicitly defined in the `columns` list of that dataset (`ADSL`).\n",
     "- **Complexity Level**: ", complexity, "\n",
     "- **Instructions**: ", complexity_instr, "\n\n",
     "**Output Format**:\n",
