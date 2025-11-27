@@ -22,7 +22,7 @@ const columnHeight = 40;
 
 const getLayoutedElements = (nodes, edges, direction = 'LR') => {
   const isHorizontal = direction === 'LR';
-  dagreGraph.setGraph({ rankdir: direction });
+  dagreGraph.setGraph({ rankdir: direction, ranksep: 150, nodesep: 50 });
 
   nodes.forEach((node) => {
     // Estimate height based on columns
