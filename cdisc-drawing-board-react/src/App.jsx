@@ -1,58 +1,40 @@
 import React, { useState, useCallback } from 'react';
-import { useNodesState, useEdgesState, addEdge, applyNodeChanges, applyEdgeChanges, useReactFlow } from '@xyflow/react';
-import yaml from 'js-yaml';
-import { toSvg } from 'html-to-image';
-import dagre from 'dagre';
-import Header from './components/Header';
-import Canvas from './components/Canvas';
-import SdtmSelectionModal from './components/Modals/SdtmSelectionModal';
-import AddDatasetModal from './components/Modals/AddDatasetModal';
-import EditDatasetModal from './components/Modals/EditDatasetModal';
-import AddColumnModal from './components/Modals/AddColumnModal';
-import DerivationModal from './components/Modals/DerivationModal';
-import SpecModal from './components/Modals/SpecModal';
-import LoadSpecModal from './components/Modals/LoadSpecModal';
-
-const dagreGraph = new dagre.graphlib.Graph();
-dagreGraph.setDefaultEdgeLabel(() => ({}));
+import { forceSimulation, forceLink, forceManyBody, forceX, forceY, forceCollide } from 'd3-force';
 
 const nodeWidth = 320;
 const headerHeight = 60;
 const columnHeight = 40;
 
-const getLayoutedElements = (nodes, edges, direction = 'LR') => {
-  const isHorizontal = direction === 'LR';
-  dagreGraph.setGraph({ rankdir: direction, ranksep: 150, nodesep: 50 });
+const runForceLayout = (nodes, edges) => {
+  const simulationNodes = nodes.map((node) => ({
+    ...node,
+    x: node.position.x,
+    y: node.position.y,
+    // Calculate dynamic height for collision
+    height: headerHeight + (node.data.dataset.columns ? node.data.dataset.columns.length : 0) * columnHeight + 20
+  }));
 
-  nodes.forEach((node) => {
-    // Estimate height based on columns
-    const numColumns = node.data.dataset.columns ? node.data.dataset.columns.length : 0;
-    const nodeHeight = headerHeight + (numColumns * columnHeight) + 20; // +20 for padding
-    dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
-  });
+  const simulationEdges = edges.map((edge) => ({
+    ...edge,
+    source: edge.source,
+    target: edge.target
+  }));
 
-  edges.forEach((edge) => {
-    dagreGraph.setEdge(edge.source, edge.target);
-  });
+  const simulation = forceSimulation(simulationNodes)
+    .force('link', forceLink(simulationEdges).id((d) => d.id).distance(250))
+    .force('charge', forceManyBody().strength(-1000))
+    .force('x', forceX().strength(0.05))
+    .force('y', forceY().strength(0.05))
+    .force('collide', forceCollide().radius((d) => Math.max(nodeWidth, d.height) / 1.5).strength(0.7))
+    .stop();
 
-  dagre.layout(dagreGraph);
+  // Run simulation synchronously for a set number of ticks to get a stable initial layout
+  for (let i = 0; i < 300; ++i) simulation.tick();
 
-  const newNodes = nodes.map((node) => {
-    const nodeWithPosition = dagreGraph.node(node.id);
-    const newNode = {
-      ...node,
-      targetPosition: isHorizontal ? 'left' : 'top',
-      sourcePosition: isHorizontal ? 'right' : 'bottom',
-      // We are shifting the dagre node position (anchor=center center) to the top left
-      // so it matches the React Flow node anchor point (top left).
-      position: {
-        x: nodeWithPosition.x - nodeWidth / 2,
-        y: nodeWithPosition.y - (headerHeight + (node.data.dataset.columns ? node.data.dataset.columns.length : 0) * columnHeight + 20) / 2,
-      },
-    };
-
-    return newNode;
-  });
+  const newNodes = simulationNodes.map((node) => ({
+    ...nodes.find((n) => n.id === node.id),
+    position: { x: node.x - nodeWidth / 2, y: node.y - node.height / 2 },
+  }));
 
   return { nodes: newNodes, edges };
 };
@@ -77,7 +59,7 @@ function App() {
   );
 
   const onAutoLayout = useCallback(() => {
-    const layouted = getLayoutedElements(getNodes(), getEdges());
+    const layouted = runForceLayout(getNodes(), getEdges());
     setNodes([...layouted.nodes]);
     setEdges([...layouted.edges]);
     window.requestAnimationFrame(() => fitView());
