@@ -433,6 +433,8 @@ server <- function(input, output, session) {
       DTOutput("exp_columns_table"),
       br(),
       actionButton("add_col_btn", "Add Column", class = "btn-info btn-sm"),
+      actionButton("add_col_btn", "Add Column", class = "btn-info btn-sm"),
+      actionButton("edit_col_btn", "Edit Selected Column", class = "btn-success btn-sm"),
       actionButton("remove_col_btn", "Remove Selected Column", class = "btn-warning btn-sm"),
       br(), br(),
       actionButton("save_ds_changes", "Save Changes", class = "btn-primary")
