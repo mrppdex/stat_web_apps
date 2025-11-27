@@ -39,7 +39,8 @@ generate_adam_shiny <- function(spec, source_datasets, log_callback = NULL) {
       # 1. Identify Source Datasets
       sources <- unique(unlist(lapply(ds_spec$columns, function(col) {
         if (!is.null(col$derivation$sources)) {
-          return(sapply(col$derivation$sources, function(s) str_split(s, "\\.")[[1]][1]))
+          srcs <- sapply(col$derivation$sources, function(s) str_split(s, "\\.")[[1]][1])
+          return(srcs[!srcs %in% c("Unknown", "undefined")])
         }
         return(NULL)
       })))
