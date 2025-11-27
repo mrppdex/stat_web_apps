@@ -18,6 +18,7 @@ ui <- fluidPage(
       textAreaInput("spec_text", "Or Paste YAML Spec Here", height = "200px"),
       h4("2. Source Data (SDTM)"),
       fileInput("sdtm_files", "Upload SDTM Datasets (CSV/Parquet)", multiple = TRUE, accept = c(".csv", ".parquet")),
+      uiOutput("map_ui"),
       h4("3. Configuration"),
       selectInput("output_format", "Output Format", choices = c("CSV", "Parquet", "RDS")),
       actionButton("generate_btn", "Generate ADaM Datasets", class = "btn-primary btn-block"),
@@ -111,6 +112,64 @@ server <- function(input, output, session) {
         }
       )
     }
+  })
+
+  # Map UI
+  output$map_ui <- renderUI({
+    req(rv$sdtm_data)
+    actionButton("map_btn", "Map Datasets to Domains", class = "btn-info btn-block")
+  })
+
+  # Mapping Modal
+  observeEvent(input$map_btn, {
+    req(rv$sdtm_data, rv$spec)
+
+    # Get domains from spec
+    domains <- c()
+    for (ds in rv$spec$datasets) {
+      if (ds$type == "SDTM") domains <- c(domains, ds$name)
+    }
+
+    showModal(modalDialog(
+      title = "Map Uploaded Files to SDTM Domains",
+      lapply(names(rv$sdtm_data), function(file_name) {
+        # Try to guess domain (case insensitive match)
+        selected <- NULL
+        if (toupper(file_name) %in% domains) selected <- toupper(file_name)
+
+        div(
+          style = "display: flex; align-items: center; margin-bottom: 10px;",
+          div(style = "width: 40%; font-weight: bold;", file_name),
+          div(style = "width: 10%; text-align: center;", "->"),
+          div(
+            style = "width: 50%;",
+            selectInput(paste0("map_", file_name), NULL, choices = c("Ignore", domains), selected = selected)
+          )
+        )
+      }),
+      footer = tagList(
+        modalButton("Cancel"),
+        actionButton("save_mapping", "Save Mapping", class = "btn-primary")
+      )
+    ))
+  })
+
+  # Save Mapping
+  observeEvent(input$save_mapping, {
+    req(rv$sdtm_data)
+    mapped_data <- list()
+
+    for (file_name in names(rv$sdtm_data)) {
+      mapped_name <- input[[paste0("map_", file_name)]]
+      if (!is.null(mapped_name) && mapped_name != "Ignore") {
+        mapped_data[[mapped_name]] <- rv$sdtm_data[[file_name]]
+        add_log(paste("Mapped", file_name, "to", mapped_name))
+      }
+    }
+
+    rv$sdtm_data <- mapped_data
+    removeModal()
+    add_log("Mapping saved.")
   })
 
   # Update Diagram

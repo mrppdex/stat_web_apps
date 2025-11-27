@@ -51,13 +51,13 @@ generate_adam_shiny <- function(spec, source_datasets, log_callback = NULL) {
 
       # 2. Prepare Sources (Rename columns)
       prepared_sources <- list()
-      missing_source <- false
+      missing_source <- FALSE
 
       for (src_name in sources) {
         ds <- get_dataset(src_name)
         if (is.null(ds)) {
           log_msg(paste("Source dataset", src_name, "not found for", ds_spec$name), type = "ERROR")
-          missing_source <- true
+          missing_source <- TRUE
           break
         }
         # Rename columns to Dataset_Column format
