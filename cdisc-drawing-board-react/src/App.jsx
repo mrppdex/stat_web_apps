@@ -202,19 +202,27 @@ function App() {
 
     if (viewport) {
       toSvg(viewport, {
-        backgroundColor: '#0a0c10',
         width: width,
         height: height,
         style: {
           width: `${width}px`,
           height: `${height}px`,
-          backgroundColor: '#0a0c10',
           transform: `translate(${-minX + 50}px, ${-minY + 50}px) scale(1)`,
         }
       })
         .then((dataUrl) => {
+          // Post-process to add full background
+          const [header, content] = dataUrl.split(',');
+          const decoded = decodeURIComponent(content);
+
+          // Insert background rect immediately after opening <svg> tag
+          const svgTagEnd = decoded.indexOf('>') + 1;
+          const backgroundRect = `<rect width="100%" height="100%" fill="#0a0c10"/>`;
+          const newSvg = decoded.slice(0, svgTagEnd) + backgroundRect + decoded.slice(svgTagEnd);
+          const newDataUrl = header + ',' + encodeURIComponent(newSvg);
+
           const a = document.createElement('a');
-          a.href = dataUrl;
+          a.href = newDataUrl;
           a.download = 'cdisc-mapping-diagram.svg';
           a.click();
         })
