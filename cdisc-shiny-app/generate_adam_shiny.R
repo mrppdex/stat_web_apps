@@ -7,6 +7,26 @@ library(stringr)
 library(arrow)
 library(readr)
 
+library(readr)
+
+# Helper function to impute partial dates
+impute_dtc <- function(dtc) {
+  # Ensure character
+  dtc <- as.character(dtc)
+  # Handle YYYY-MM-DD (keep as is, but validate)
+  res <- as.Date(dtc, format = "%Y-%m-%d")
+
+  # Handle YYYY-MM
+  mask_ym <- is.na(res) & nchar(dtc) == 7
+  res[mask_ym] <- as.Date(paste0(dtc[mask_ym], "-01"), format = "%Y-%m-%d")
+
+  # Handle YYYY
+  mask_y <- is.na(res) & nchar(dtc) == 4
+  res[mask_y] <- as.Date(paste0(dtc[mask_y], "-01-01"), format = "%Y-%m-%d")
+
+  return(res)
+}
+
 generate_adam_shiny <- function(spec, source_datasets, log_callback = NULL) {
   log_msg <- function(msg, type = "INFO") {
     formatted_msg <- paste0("[", format(Sys.time(), "%H:%M:%S"), "] [", type, "] ", msg)
