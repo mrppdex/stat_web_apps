@@ -244,6 +244,9 @@ function App() {
     const newNodes = [];
     const newEdges = [];
 
+    let sdtmCount = 0;
+    let adamCount = 0;
+
     spec.datasets.forEach((ds) => {
       const dsId = `ds-${ds.name}`;
       const columns = ds.columns.map(col => {
@@ -282,10 +285,22 @@ function App() {
         oneRowPerSubject: ds.one_row_per_subject || false,
       };
 
+      // Auto-layout logic
+      let position = ds.position;
+      if (!position) {
+        if (ds.type === 'SDTM') {
+          position = { x: 50, y: 50 + (sdtmCount * 400) }; // Stack vertically on left
+          sdtmCount++;
+        } else {
+          position = { x: 600, y: 50 + (adamCount * 400) }; // Stack vertically on right
+          adamCount++;
+        }
+      }
+
       newNodes.push({
         id: dsId,
         type: 'dataset',
-        position: ds.position || { x: 0, y: 0 },
+        position: position,
         data: {
           dataset,
           onDelete: (name) => handleDeleteDataset(name),
