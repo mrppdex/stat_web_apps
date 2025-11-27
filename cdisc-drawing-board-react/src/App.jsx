@@ -195,7 +195,7 @@ function App() {
       maxY = Math.max(maxY, node.position.y + (node.data.dataset.columns.length * 30 + 100)); // Estimate height
     });
 
-    const width = maxX - minX + 100; // Padding
+    const width = maxX - minX + 400; // Increased Padding for right-side links
     const height = maxY - minY + 100; // Padding
 
     const viewport = document.querySelector('.react-flow__viewport');
