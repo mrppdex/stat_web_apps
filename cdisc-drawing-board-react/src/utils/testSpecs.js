@@ -269,6 +269,7 @@ export const testSpec = {
       position: { x: 900, y: 350 },
       one_row_per_subject: false,
       join_keys: ["STUDYID", "USUBJID", "LBSEQ"],
+      group_keys: ["STUDYID", "USUBJID", "PARAMCD"],
       columns: [
         {
           name: "STUDYID",
@@ -348,6 +349,7 @@ export const testSpec = {
       position: { x: 900, y: 650 },
       one_row_per_subject: false,
       join_keys: ["STUDYID", "USUBJID", "DSSEQ"],
+      group_keys: ["STUDYID", "USUBJID", "PARAMCD"],
       columns: [
         {
           name: "STUDYID",
@@ -407,6 +409,7 @@ export const testSpec = {
       position: { x: 1200, y: 200 },
       one_row_per_subject: false,
       join_keys: ["STUDYID", "USUBJID", "EXSEQ"],
+      group_keys: ["STUDYID", "USUBJID", "PARAMCD"],
       columns: [
         {
           name: "STUDYID",

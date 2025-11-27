@@ -75,13 +75,14 @@ function App() {
     onColumnClick: (dsName, colName) => handleColumnClick(dsName, colName)
   });
 
-  const addDataset = (name, type, columns, position = { x: 100, y: 100 }) => {
+  const addDataset = (name, type, columns, position = { x: 100, y: 100 }, groupKeys = []) => {
     const newDataset = {
       id: `ds-${name}`,
       name,
       type,
       columns,
       joinKeys: [],
+      groupKeys: groupKeys,
       oneRowPerSubject: false,
     };
 
@@ -99,8 +100,8 @@ function App() {
     addDataset(domain, 'SDTM', columns, { x: Math.random() * 400, y: Math.random() * 400 });
   };
 
-  const handleAddAdam = (name, columns) => {
-    addDataset(name, 'ADaM', columns, { x: Math.random() * 400 + 400, y: Math.random() * 400 });
+  const handleAddAdam = (name, columns, groupKeys = []) => {
+    addDataset(name, 'ADaM', columns, { x: Math.random() * 400 + 400, y: Math.random() * 400 }, groupKeys);
   };
 
   const handleUpdateDataset = (name, updates) => {
@@ -212,6 +213,7 @@ function App() {
           type: ds.type,
           position: node.position,
           join_keys: ds.type === 'ADaM' ? ds.joinKeys : undefined,
+          group_keys: ds.type === 'ADaM' ? ds.groupKeys : undefined,
           one_row_per_subject: ds.type === 'ADaM' ? ds.oneRowPerSubject : undefined,
           columns: ds.columns.map(col => {
             const newCol = { name: col.name, desc: col.desc, key: col.key };
@@ -276,6 +278,7 @@ function App() {
         type: ds.type,
         columns,
         joinKeys: ds.join_keys || [],
+        groupKeys: ds.group_keys || [],
         oneRowPerSubject: ds.one_row_per_subject || false,
       };
 

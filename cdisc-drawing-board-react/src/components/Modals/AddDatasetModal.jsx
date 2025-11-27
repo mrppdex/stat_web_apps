@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 
 const AddDatasetModal = ({ isOpen, onClose, onCreate }) => {
   const [name, setName] = useState('');
+  const [groupKeys, setGroupKeys] = useState('');
   const [columns, setColumns] = useState([
     { name: 'STUDYID', desc: 'Study Identifier', key: true },
     { name: 'USUBJID', desc: 'Unique Subject Identifier', key: true }
@@ -27,9 +28,10 @@ const AddDatasetModal = ({ isOpen, onClose, onCreate }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!name) return;
-    onCreate(name.toUpperCase(), columns.map(c => ({ ...c, name: c.name.toUpperCase() })));
+    onCreate(name.toUpperCase(), columns.map(c => ({ ...c, name: c.name.toUpperCase() })), groupKeys.split(',').map(k => k.trim().toUpperCase()).filter(k => k));
     onClose();
     setName('');
+    setGroupKeys('');
     setColumns([
       { name: 'STUDYID', desc: 'Study Identifier', key: true },
       { name: 'USUBJID', desc: 'Unique Subject Identifier', key: true }
@@ -59,6 +61,18 @@ const AddDatasetModal = ({ isOpen, onClose, onCreate }) => {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
+            </div>
+            <div className="mb-6">
+              <label htmlFor="groupKeys" className="block text-sm font-medium text-slate-300 mb-2">Group Keys (Optional)</label>
+              <input
+                type="text"
+                id="groupKeys"
+                className="mt-1 block w-full px-4 py-3 bg-black/40 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-transparent transition-all"
+                placeholder="e.g., STUDYID, USUBJID, PARAMCD"
+                value={groupKeys}
+                onChange={(e) => setGroupKeys(e.target.value)}
+              />
+              <p className="mt-1 text-xs text-slate-500">Comma-separated list of columns to group by during derivation.</p>
             </div>
             <h3 className="text-lg font-semibold mb-2 text-fg">Columns</h3>
             <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">

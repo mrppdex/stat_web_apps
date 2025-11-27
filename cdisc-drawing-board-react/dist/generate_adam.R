@@ -120,8 +120,12 @@ generate_adam <- function(spec_file, data_dir = ".") {
 
       # 3. Group by Join Keys
       # The keys in merged_data are prefixed (e.g. DM_USUBJID).
-      # We need to group by these columns.
-      group_cols <- paste(sources[1], ds_spec$join_keys, sep = "_")
+      # We      # 4. Group by Join Keys or Group Keys
+      if (!is.null(ds_spec$group_keys) && length(ds_spec$group_keys) > 0) {
+        group_cols <- paste(sources[1], ds_spec$group_keys, sep = "_")
+      } else {
+        group_cols <- paste(sources[1], ds_spec$join_keys, sep = "_")
+      }
       group_cols <- group_cols[group_cols %in% colnames(merged_data)]
 
       if (length(group_cols) > 0) {

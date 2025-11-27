@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 
 const EditDatasetModal = ({ isOpen, onClose, onSave, dataset }) => {
   const [joinKeys, setJoinKeys] = useState('');
+  const [groupKeys, setGroupKeys] = useState('');
   const [oneRow, setOneRow] = useState(false);
 
   useEffect(() => {
     if (dataset) {
       setJoinKeys(dataset.joinKeys.join(', '));
+      setGroupKeys(dataset.groupKeys ? dataset.groupKeys.join(', ') : '');
       setOneRow(dataset.oneRowPerSubject);
     }
   }, [dataset]);
@@ -17,6 +19,7 @@ const EditDatasetModal = ({ isOpen, onClose, onSave, dataset }) => {
     e.preventDefault();
     onSave(dataset.name, {
       joinKeys: joinKeys.split(',').map(k => k.trim().toUpperCase()).filter(k => k),
+      groupKeys: groupKeys.split(',').map(k => k.trim().toUpperCase()).filter(k => k),
       oneRowPerSubject: oneRow
     });
     onClose();
@@ -39,6 +42,18 @@ const EditDatasetModal = ({ isOpen, onClose, onSave, dataset }) => {
                 onChange={(e) => setJoinKeys(e.target.value)}
               />
               <p className="mt-1 text-xs text-gray-500">Comma-separated list of columns to use when joining source datasets.</p>
+            </div>
+            <div>
+              <label htmlFor="editDatasetGroupKeys" className="block text-sm font-medium text-gray-400">Group Keys</label>
+              <input
+                type="text"
+                id="editDatasetGroupKeys"
+                className="mt-1 block w-full px-3 py-2 bg-[#0f1322] border border-border rounded-md text-fg focus:outline-none focus:ring-accent focus:border-accent"
+                placeholder="STUDYID, USUBJID, PARAMCD"
+                value={groupKeys}
+                onChange={(e) => setGroupKeys(e.target.value)}
+              />
+              <p className="mt-1 text-xs text-gray-500">Comma-separated list of columns to group by during derivation.</p>
             </div>
             <div className="flex items-center pt-2">
               <input
