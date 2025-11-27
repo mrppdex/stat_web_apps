@@ -206,8 +206,9 @@ function App() {
         width: width,
         height: height,
         style: {
-          width: width,
-          height: height,
+          width: `${width}px`,
+          height: `${height}px`,
+          backgroundColor: '#0a0c10',
           transform: `translate(${-minX + 50}px, ${-minY + 50}px) scale(1)`,
         }
       })
