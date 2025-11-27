@@ -499,6 +499,115 @@ server <- function(input, output, session) {
     update_diagram()
   })
 
+  # Edit Column
+  observeEvent(input$edit_col_btn, {
+    add_log("Edit Column button clicked.")
+    if (is.null(input$exp_columns_table_rows_selected)) {
+      showModal(modalDialog(
+        title = "Warning",
+        "Please select a column to edit.",
+        easyClose = TRUE,
+        footer = modalButton("Close")
+      ))
+      return()
+    }
+
+    req(rv$spec, rv_explorer$selected_ds)
+
+    # Get selected row index
+    idx <- input$exp_columns_table_rows_selected
+    add_log(paste("Editing column at index:", idx))
+
+    # Find dataset and column
+    ds <- NULL
+    col <- NULL
+    for (d in rv$spec$datasets) {
+      if (d$name == rv_explorer$selected_ds) {
+        ds <- d
+        if (idx <= length(d$columns)) {
+          col <- d$columns[[idx]]
+        }
+        break
+      }
+    }
+
+    if (is.null(col)) {
+      add_log("Error: Column not found.")
+      return()
+    }
+
+    showModal(modalDialog(
+      title = paste("Edit Column:", col$name),
+      textInput("edit_col_name", "Column Name", value = col$name),
+      textInput("edit_col_label", "Label", value = ifelse(is.null(col$label), "", col$label)),
+      selectInput("edit_col_type", "Type", choices = c("text", "integer", "float", "date", "datetime"), selected = col$type),
+      textAreaInput("edit_col_logic", "Derivation Logic (Optional)", value = ifelse(is.null(col$derivation$logic), "", col$derivation$logic)),
+      footer = tagList(
+        modalButton("Cancel"),
+        actionButton("confirm_edit_col", "Save Changes", class = "btn-primary")
+      )
+    ))
+  })
+
+  observeEvent(input$confirm_edit_col, {
+    req(rv$spec, rv_explorer$selected_ds, input$exp_columns_table_rows_selected, input$edit_col_name)
+
+    idx <- input$exp_columns_table_rows_selected
+
+    # Update spec
+    for (i in seq_along(rv$spec$datasets)) {
+      if (rv$spec$datasets[[i]]$name == rv_explorer$selected_ds) {
+        # Update column properties
+        rv$spec$datasets[[i]]$columns[[idx]]$name <- input$edit_col_name
+        rv$spec$datasets[[i]]$columns[[idx]]$label <- input$edit_col_label
+        rv$spec$datasets[[i]]$columns[[idx]]$type <- input$edit_col_type
+
+        if (input$edit_col_logic != "") {
+          rv$spec$datasets[[i]]$columns[[idx]]$derivation <- list(logic = input$edit_col_logic)
+        } else {
+          rv$spec$datasets[[i]]$columns[[idx]]$derivation <- NULL
+        }
+        break
+      }
+    }
+
+    updateTextAreaInput(session, "spec_text", value = yaml::as.yaml(rv$spec))
+    removeModal()
+    add_log(paste("Updated column:", input$edit_col_name))
+    update_diagram()
+  })
+
+  # Remove Column
+  observeEvent(input$remove_col_btn, {
+    if (is.null(input$exp_columns_table_rows_selected)) {
+      showModal(modalDialog(
+        title = "Warning",
+        "Please select a column to remove.",
+        easyClose = TRUE,
+        footer = modalButton("Close")
+      ))
+      return()
+    }
+
+    req(rv$spec, rv_explorer$selected_ds)
+
+    # Get selected row index (1-based from DT)
+    idx <- input$exp_columns_table_rows_selected
+
+    for (i in seq_along(rv$spec$datasets)) {
+      if (rv$spec$datasets[[i]]$name == rv_explorer$selected_ds) {
+        # Remove column at index
+        col_name <- rv$spec$datasets[[i]]$columns[[idx]]$name
+        rv$spec$datasets[[i]]$columns <- rv$spec$datasets[[i]]$columns[-idx]
+        add_log(paste("Removed column:", col_name))
+        break
+      }
+    }
+
+    updateTextAreaInput(session, "spec_text", value = yaml::as.yaml(rv$spec))
+    update_diagram()
+  })
+
   # Add Dataset
   observeEvent(input$add_ds_btn, {
     req(rv$spec)
