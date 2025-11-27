@@ -59,6 +59,8 @@ generate_llm_prompt <- function(sdtm_data, target_adams, complexity) {
     "          sources: [DM.STUDYID]\n",
     "- **Derivation Logic Rules**:\n",
     "  - The 'logic' field must be a valid R expression compatible with `dplyr::mutate()`.\n",
+    "  - **IMPORTANT**: For date conversions from character (ISO 8601) format (e.g., '2023-01-15', '2023-01'), YOU MUST USE the helper function `impute_dtc()` instead of `as.Date()`.\n",
+    "  - Example: `impute_dtc(DM_RFSTDTC)` instead of `as.Date(DM_RFSTDTC)`.\n",
     "  - **External Variables**: Refer to variables from OTHER datasets using `DOMAIN_VARIABLE` (e.g., `DM_USUBJID`).\n",
     "  - **Internal Variables**: Refer to variables created within the CURRENT dataset using the simple name (e.g., `TRTSDT`), NOT `DOMAIN_VARIABLE`.\n",
     "  - Do not use `$` syntax.\n",
