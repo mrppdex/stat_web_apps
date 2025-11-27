@@ -1,7 +1,6 @@
-import React from 'react';
-import { Download, FileJson, Image as ImageIcon, Plus, Upload } from 'lucide-react';
+import { Download, FileJson, Image as ImageIcon, Plus, Upload, LayoutDashboard } from 'lucide-react';
 
-const Header = ({ onLoadSpec, onAddSdtm, onAddAdam, onViewSpec, onExportYaml, onExportSvg, onDownloadR }) => {
+const Header = ({ onLoadSpec, onAddSdtm, onAddAdam, onViewSpec, onExportYaml, onExportSvg, onDownloadR, onAutoLayout }) => {
   return (
     <div className="fixed top-4 right-4 z-50 flex items-center gap-3">
       <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md p-1.5 rounded-xl border border-white/10 shadow-xl">
@@ -12,6 +11,9 @@ const Header = ({ onLoadSpec, onAddSdtm, onAddAdam, onViewSpec, onExportYaml, on
           <FileJson size={20} />
         </button>
         <div className="w-px h-6 bg-white/10 mx-1"></div>
+        <button onClick={onAutoLayout} className="p-2 hover:bg-white/10 text-slate-300 hover:text-white rounded-lg transition-all duration-200" title="Auto Layout">
+          <LayoutDashboard size={20} />
+        </button>
         <button onClick={onExportYaml} className="p-2 hover:bg-white/10 text-slate-300 hover:text-white rounded-lg transition-all duration-200" title="Export YAML">
           <Download size={20} />
         </button>

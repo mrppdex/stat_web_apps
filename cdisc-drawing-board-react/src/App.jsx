@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { useNodesState, useEdgesState, addEdge, applyNodeChanges, applyEdgeChanges, useReactFlow } from '@xyflow/react';
 import yaml from 'js-yaml';
 import { toSvg } from 'html-to-image';
+import dagre from 'dagre';
 import Header from './components/Header';
 import Canvas from './components/Canvas';
 import SdtmSelectionModal from './components/Modals/SdtmSelectionModal';
@@ -12,10 +13,54 @@ import DerivationModal from './components/Modals/DerivationModal';
 import SpecModal from './components/Modals/SpecModal';
 import LoadSpecModal from './components/Modals/LoadSpecModal';
 
+const dagreGraph = new dagre.graphlib.Graph();
+dagreGraph.setDefaultEdgeLabel(() => ({}));
+
+const nodeWidth = 320;
+const headerHeight = 60;
+const columnHeight = 40;
+
+const getLayoutedElements = (nodes, edges, direction = 'LR') => {
+  const isHorizontal = direction === 'LR';
+  dagreGraph.setGraph({ rankdir: direction });
+
+  nodes.forEach((node) => {
+    // Estimate height based on columns
+    const numColumns = node.data.dataset.columns ? node.data.dataset.columns.length : 0;
+    const nodeHeight = headerHeight + (numColumns * columnHeight) + 20; // +20 for padding
+    dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
+  });
+
+  edges.forEach((edge) => {
+    dagreGraph.setEdge(edge.source, edge.target);
+  });
+
+  dagre.layout(dagreGraph);
+
+  const newNodes = nodes.map((node) => {
+    const nodeWithPosition = dagreGraph.node(node.id);
+    const newNode = {
+      ...node,
+      targetPosition: isHorizontal ? 'left' : 'top',
+      sourcePosition: isHorizontal ? 'right' : 'bottom',
+      // We are shifting the dagre node position (anchor=center center) to the top left
+      // so it matches the React Flow node anchor point (top left).
+      position: {
+        x: nodeWithPosition.x - nodeWidth / 2,
+        y: nodeWithPosition.y - (headerHeight + (node.data.dataset.columns ? node.data.dataset.columns.length : 0) * columnHeight + 20) / 2,
+      },
+    };
+
+    return newNode;
+  });
+
+  return { nodes: newNodes, edges };
+};
+
 function App() {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const { getNodes, getEdges } = useReactFlow();
+  const { getNodes, getEdges, fitView } = useReactFlow();
 
   // Modal states
   const [isSdtmModalOpen, setSdtmModalOpen] = useState(false);
@@ -30,6 +75,13 @@ function App() {
     (params) => setEdges((eds) => addEdge({ ...params, animated: true, style: { stroke: '#34d399', strokeWidth: 2 } }, eds)),
     [setEdges],
   );
+
+  const onAutoLayout = useCallback(() => {
+    const layouted = getLayoutedElements(getNodes(), getEdges());
+    setNodes([...layouted.nodes]);
+    setEdges([...layouted.edges]);
+    window.requestAnimationFrame(() => fitView());
+  }, [getNodes, getEdges, setNodes, setEdges, fitView]);
 
   const handleColumnClick = (datasetName, columnName) => {
     // Use getNodes() and getEdges() to ensure we have the latest state
@@ -405,6 +457,7 @@ function App() {
         onExportYaml={handleExportYaml}
         onExportSvg={handleExportSvg}
         onDownloadR={handleDownloadRScript}
+        onAutoLayout={onAutoLayout}
       />
       <Canvas
         nodes={nodes}
