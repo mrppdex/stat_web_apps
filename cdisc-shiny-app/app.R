@@ -8,6 +8,7 @@ library(arrow)
 
 source("generate_adam_shiny.R")
 source("generate_excel_spec.R")
+source("generate_prompt.R")
 
 ui <- fluidPage(
   theme = shinytheme("flatly"),
@@ -31,13 +32,44 @@ ui <- fluidPage(
     mainPanel(
       tabsetPanel(
         tabPanel(
-          "Diagram",
-          br(),
-          grVizOutput("diagram", height = "600px")
+          "Visualization",
+          div(
+            style = "height: 600px; overflow: auto;",
+            DiagrammeROutput("diagram", height = "600px")
+          )
         ),
         tabPanel(
-          "Logs",
+          "LLM Prompt Generator",
           br(),
+          h4("Generate Prompt for Spec Creation"),
+          p("Select the ADaM datasets you want to create and the desired complexity. The app will generate a prompt including your loaded SDTM structures."),
+          fluidRow(
+            column(
+              4,
+              checkboxGroupInput("target_adams", "Target ADaM Datasets:",
+                choices = c("ADSL", "ADAE", "ADLB", "ADVS", "ADMH", "ADCM", "ADEX", "ADDS"),
+                selected = c("ADSL")
+              )
+            ),
+            column(
+              4,
+              radioButtons("complexity", "Complexity Level:",
+                choices = c("Low", "Medium", "High"),
+                selected = "Medium"
+              )
+            ),
+            column(
+              4,
+              br(),
+              actionButton("gen_prompt_btn", "Generate Prompt", class = "btn-primary btn-lg")
+            )
+          ),
+          hr(),
+          h5("Generated Prompt (Copy and Paste to LLM):"),
+          textAreaInput("llm_prompt_out", NULL, width = "100%", height = "400px")
+        ),
+        tabPanel(
+          "Log",
           verbatimTextOutput("log_output")
         ),
         tabPanel(
@@ -300,6 +332,20 @@ server <- function(input, output, session) {
       saveWorkbook(wb, file, overwrite = TRUE)
     }
   )
+
+  # Generate Prompt Handler
+  observeEvent(input$gen_prompt_btn, {
+    req(input$target_adams)
+
+    prompt <- generate_llm_prompt(
+      sdtm_data = rv$sdtm_data,
+      target_adams = input$target_adams,
+      complexity = input$complexity
+    )
+
+    updateTextAreaInput(session, "llm_prompt_out", value = prompt)
+    add_log("LLM Prompt generated.")
+  })
 }
 
 shinyApp(ui = ui, server = server)

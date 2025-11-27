@@ -12,7 +12,8 @@ generate_excel_spec <- function(spec) {
     Description = sapply(spec$datasets, function(x) x$title %||% ""),
     Class = sapply(spec$datasets, function(x) x$type),
     Structure = sapply(spec$datasets, function(x) ifelse(isTRUE(x$one_row_per_subject), "One Record per Subject", "One Record per Subject per Visit/Event")),
-    Keys = sapply(spec$datasets, function(x) paste(x$join_keys %||% "", collapse = ", ")),
+    JoinKeys = sapply(spec$datasets, function(x) paste(x$join_keys %||% "", collapse = ", ")),
+    GroupKeys = sapply(spec$datasets, function(x) paste(x$group_keys %||% "", collapse = ", ")),
     stringsAsFactors = FALSE
   )
   writeDataTable(wb, "Overview", overview_data, tableStyle = "TableStyleMedium2")
