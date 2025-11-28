@@ -42,21 +42,66 @@ ui <- fluidPage(
           )
         ),
         tabPanel(
-          "Spec Explorer",
+          "LLM Prompt Generator",
           br(),
-          fluidRow(
-            column(3, uiOutput("explorer_ds_list")),
-            column(9, uiOutput("explorer_ds_details"))
-          )
-        ),
-        tabPanel(
-          "LLM Prompt",
-          br(),
-          selectInput("complexity", "Complexity Level", choices = c("Low", "Medium", "High"), selected = "Medium"),
-          actionButton("gen_prompt_btn", "Generate Prompt", class = "btn-warning"),
+          h4("Generate Prompt for Spec Creation"),
+          p("Select the ADaM datasets you want to create and the desired complexity. The app will generate a prompt including your loaded SDTM structures."),
+          tabPanel(
+            "Visualization",
+            div(
+              style = "height: 600px; overflow: auto;",
+              grVizOutput("diagram", height = "600px")
+            )
+          ),
+          tabPanel(
+            "Spec Explorer",
+            br(),
+            fluidRow(
+              column(3, uiOutput("explorer_ds_list")),
+              column(9, uiOutput("explorer_ds_details"))
+            )
+          ),
+          tabPanel(
+            "LLM Prompt",
+            br(),
+            column(
+              4,
+              checkboxGroupInput("target_adams", "Target ADaM Datasets:",
+                choices = c("ADSL", "ADAE", "ADLB", "ADVS", "ADMH", "ADCM", "ADEX", "ADDS"),
+                selected = c("ADSL")
+              )
+            ),
+            column(
+              4,
+              radioButtons("complexity", "Complexity Level:",
+                choices = c("Low", "Medium", "High"),
+                selected = "Medium"
+              )
+            ),
+            column(
+              4,
+              br(),
+              actionButton("gen_prompt_btn", "Generate Prompt", class = "btn-primary btn-lg")
+            )
+          ),
           hr(),
-          textAreaInput("llm_prompt_out", "Generated Prompt", width = "100%", height = "400px"),
-          tags$button("Copy to Clipboard", class = "btn btn-default btn-copy", onclick = "copyToClipboard()")
+          div(
+            style = "display: flex; justify-content: space-between; align-items: center;",
+            h5("Generated Prompt (Copy and Paste to LLM):"),
+            actionButton("copy_btn", "Copy to Clipboard", icon = icon("copy"), class = "btn-sm btn-default")
+          ),
+          textAreaInput("llm_prompt_out", NULL, width = "100%", height = "400px"),
+          tags$script("
+            $(document).on('click', '#copy_btn', function() {
+              var copyText = document.getElementById('llm_prompt_out');
+              copyText.select();
+              navigator.clipboard.writeText(copyText.value).then(function() {
+                alert('Prompt copied to clipboard!');
+              }, function(err) {
+                console.error('Async: Could not copy text: ', err);
+              });
+            });
+          ")
         ),
         tabPanel(
           "Logs",
@@ -65,71 +110,55 @@ ui <- fluidPage(
         tabPanel(
           "Preview",
           uiOutput("preview_tabs")
-        ),
-        tabPanel(
-          "YAML Spec",
-          textAreaInput("spec_text", "Editable Spec", width = "100%", height = "600px")
         )
       )
     )
   )
 )
 
-# --- Server Logic ---
 server <- function(input, output, session) {
-  # Reactive Values
+  # Reactive values
   rv <- reactiveValues(
     spec = NULL,
     sdtm_data = list(),
     adam_data = list(),
     logs = c(),
-    join_warnings = list() # Store join warnings
+    diagram_code = "",
+    join_warnings = list()
   )
 
-  # Logging Helper
+  # Log handler
   add_log <- function(msg) {
-    timestamp <- format(Sys.time(), "%H:%M:%S")
-    rv$logs <- c(paste0("[", timestamp, "] ", msg), rv$logs)
+    rv$logs <- c(rv$logs, msg)
   }
 
-  output$logs <- renderUI({
-    HTML(paste(rv$logs, collapse = "<br/>"))
+  # Parse Spec
+  observe({
+    spec_content <- NULL
+    if (!is.null(input$spec_file)) {
+      spec_content <- yaml::read_yaml(input$spec_file$datapath)
+    } else if (input$spec_text != "") {
+      tryCatch(
+        {
+          spec_content <- yaml::read_yaml(text = input$spec_text)
+        },
+        error = function(e) {
+          # Silent error while typing
+        }
+      )
+    }
+
+    if (!is.null(spec_content)) {
+      rv$spec <- spec_content
+      update_diagram()
+    }
   })
 
-  # Load Spec
-  observeEvent(input$spec_file, {
-    req(input$spec_file)
-    tryCatch(
-      {
-        rv$spec <- yaml::read_yaml(input$spec_file$datapath)
-        updateTextAreaInput(session, "spec_text", value = yaml::as.yaml(rv$spec))
-        add_log(paste("Loaded specification:", input$spec_file$name))
-        update_diagram()
-      },
-      error = function(e) {
-        add_log(paste("Error loading spec:", e$message))
-      }
-    )
-  })
-
-  # Sync Text Area to Spec Object
-  observeEvent(input$spec_text, {
-    req(input$spec_text)
-    tryCatch(
-      {
-        rv$spec <- yaml::read_yaml(text = input$spec_text)
-        update_diagram()
-      },
-      error = function(e) {
-        # Silent error or log if needed
-      }
-    )
-  })
-
-  # Load SDTM/Source Data
+  # Load SDTM Data
   observeEvent(input$sdtm_files, {
     req(input$sdtm_files)
     rv$sdtm_data <- list()
+    add_log("Loading SDTM files...")
 
     for (i in 1:nrow(input$sdtm_files)) {
       path <- input$sdtm_files$datapath[i]
@@ -143,12 +172,10 @@ server <- function(input, output, session) {
           } else if (tolower(ext) == "parquet") {
             df <- arrow::read_parquet(path)
           } else {
-            # Fallback or error
-            add_log(paste("Unsupported file type:", ext))
             next
           }
           rv$sdtm_data[[name]] <- df
-          add_log(paste("Loaded dataset:", name))
+          add_log(paste("Loaded", name))
         },
         error = function(e) {
           add_log(paste("Error loading", name, ":", e$message))
@@ -222,19 +249,33 @@ server <- function(input, output, session) {
     nodes <- c()
     edges <- c()
 
+    # Create Edges
     for (ds in rv$spec$datasets) {
-      nodes <- c(nodes, paste0(ds$name, " [label = '", ds$name, "\\n(", ds$type, ")', shape = ", ifelse(ds$type == "SDTM", "box", "oval"), "]"))
-
       if (ds$type == "ADaM") {
         sources <- unique(unlist(lapply(ds$columns, function(col) {
           if (!is.null(col$derivation$sources)) {
-            return(sapply(col$derivation$sources, function(s) str_split(s, "\\.")[[1]][1]))
+            sapply(col$derivation$sources, function(s) str_split(s, "\\.")[[1]][1])
           }
-          return(NULL)
         })))
 
+        # Filter out self-references and unknown
+        sources <- sources[!sources %in% c("Unknown", "undefined", ds$name)]
+
         for (src in sources) {
-          edges <- c(edges, paste0(src, " -> ", ds$name))
+          # Check for warnings
+          is_warning <- FALSE
+          for (w in rv$join_warnings) {
+            if (w$target_dataset == ds$name && (w$source_1 == src || w$source_2 == src)) {
+              is_warning <- TRUE
+              break
+            }
+          }
+
+          color <- ifelse(is_warning, "red", "gray")
+          penwidth <- ifelse(is_warning, "2.0", "1.0")
+          tooltip <- ifelse(is_warning, "Warning: 1:N Join Detected", "")
+
+          edges <- c(edges, sprintf("  %s -> %s [color = '%s', penwidth = '%s', tooltip = '%s'];", src, ds$name, color, penwidth, tooltip))
         }
       }
     }
@@ -260,12 +301,22 @@ server <- function(input, output, session) {
   observeEvent(input$generate_btn, {
     req(rv$spec, rv$sdtm_data)
     rv$logs <- c() # Clear logs
+    rv$join_warnings <- list() # Clear warnings
     add_log("Starting generation...")
 
     tryCatch(
       {
-        rv$adam_data <- generate_adam_shiny(rv$spec, rv$sdtm_data, log_callback = add_log)
+        res <- generate_adam_shiny(rv$spec, rv$sdtm_data, log_callback = add_log)
+
+        if (is.list(res) && "datasets" %in% names(res)) {
+          rv$adam_data <- res$datasets
+          rv$join_warnings <- res$warnings
+        } else {
+          rv$adam_data <- res
+        }
+
         add_log("Generation finished successfully!")
+        update_diagram()
       },
       error = function(e) {
         add_log(paste("Critical Error:", e$message))
@@ -279,7 +330,7 @@ server <- function(input, output, session) {
   })
 
   # Preview Tabs
-  output$dataset_tabs <- renderUI({
+  output$preview_tabs <- renderUI({
     req(rv$adam_data)
     tabs <- lapply(names(rv$adam_data), function(name) {
       tabPanel(name, DTOutput(paste0("dt_", name)))
@@ -436,10 +487,10 @@ server <- function(input, output, session) {
 
     # Create data frame for columns
     cols_df <- data.frame(
-      Name = sapply(ds$columns, function(x) x$name),
-      Label = sapply(ds$columns, function(x) ifelse(is.null(x$label), "", x$label)),
-      Type = sapply(ds$columns, function(x) x$type),
-      Logic = sapply(ds$columns, function(x) ifelse(is.null(x$derivation$logic), "", x$derivation$logic)),
+      Name = vapply(ds$columns, function(x) if (is.null(x$name)) "" else as.character(x$name), character(1)),
+      Label = vapply(ds$columns, function(x) if (is.null(x$label)) "" else as.character(x$label), character(1)),
+      Type = vapply(ds$columns, function(x) if (is.null(x$type)) "" else as.character(x$type), character(1)),
+      Logic = vapply(ds$columns, function(x) if (is.null(x$derivation$logic)) "" else as.character(x$derivation$logic), character(1)),
       stringsAsFactors = FALSE
     )
 
@@ -530,45 +581,35 @@ server <- function(input, output, session) {
 
     showModal(modalDialog(
       title = paste("Edit Column:", col$name),
-      textInput("edit_col_name", "Name", value = col$name),
+      textInput("edit_col_name", "Column Name", value = col$name),
       textInput("edit_col_label", "Label", value = ifelse(is.null(col$label), "", col$label)),
       selectInput("edit_col_type", "Type", choices = c("text", "integer", "float", "date", "datetime"), selected = col$type),
-      textAreaInput("edit_col_logic", "Derivation Logic", value = ifelse(is.null(col$derivation$logic), "", col$derivation$logic)),
-      textInput("edit_col_group_by", "Group By Keys (comma-separated)", value = ifelse(is.null(col$derivation$group_by), "", paste(col$derivation$group_by, collapse = ", "))),
+      textAreaInput("edit_col_logic", "Derivation Logic (Optional)", value = ifelse(is.null(col$derivation$logic), "", col$derivation$logic)),
       footer = tagList(
         modalButton("Cancel"),
-        actionButton("save_col_edit", "Save", class = "btn-primary")
+        actionButton("confirm_edit_col", "Save Changes", class = "btn-primary")
       )
     ))
   })
 
-  observeEvent(input$save_col_edit, {
-    req(rv$spec, rv_explorer$selected_ds, input$exp_columns_table_rows_selected)
+  observeEvent(input$confirm_edit_col, {
+    req(rv$spec, rv_explorer$selected_ds, input$exp_columns_table_rows_selected, input$edit_col_name)
 
-    row_idx <- input$exp_columns_table_rows_selected
+    idx <- input$exp_columns_table_rows_selected
 
     # Update spec
     for (i in seq_along(rv$spec$datasets)) {
       if (rv$spec$datasets[[i]]$name == rv_explorer$selected_ds) {
-        col <- rv$spec$datasets[[i]]$columns[[row_idx]]
+        # Update column properties
+        rv$spec$datasets[[i]]$columns[[idx]]$name <- input$edit_col_name
+        rv$spec$datasets[[i]]$columns[[idx]]$label <- input$edit_col_label
+        rv$spec$datasets[[i]]$columns[[idx]]$type <- input$edit_col_type
 
-        col$name <- input$edit_col_name
-        col$label <- input$edit_col_label
-        col$type <- input$edit_col_type
-
-        if (is.null(col$derivation)) col$derivation <- list()
-        col$derivation$logic <- input$edit_col_logic
-
-        # Parse group keys
-        g_keys <- trimws(strsplit(input$edit_col_group_by, ",")[[1]])
-        g_keys <- g_keys[g_keys != ""]
-        if (length(g_keys) > 0) {
-          col$derivation$group_by <- as.list(g_keys)
+        if (input$edit_col_logic != "") {
+          rv$spec$datasets[[i]]$columns[[idx]]$derivation <- list(logic = input$edit_col_logic)
         } else {
-          col$derivation$group_by <- NULL
+          rv$spec$datasets[[i]]$columns[[idx]]$derivation <- NULL
         }
-
-        rv$spec$datasets[[i]]$columns[[row_idx]] <- col
         break
       }
     }

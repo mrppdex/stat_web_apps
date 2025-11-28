@@ -38,7 +38,6 @@ generate_adam_shiny <- function(spec, source_datasets, log_callback = NULL) {
   }
 
   generated_datasets <- list()
-  join_warnings <- list()
 
   # Helper to get dataset from source or generated list
   get_dataset <- function(name) {
@@ -52,6 +51,8 @@ generate_adam_shiny <- function(spec, source_datasets, log_callback = NULL) {
   }
 
   log_msg("Starting ADaM generation...")
+
+  join_warnings <- list()
 
   for (ds_spec in spec$datasets) {
     if (ds_spec$type == "ADaM") {
@@ -146,34 +147,13 @@ generate_adam_shiny <- function(spec, source_datasets, log_callback = NULL) {
       }
 
       # 5. Apply Derivations
-      mutate_exprs <- list()
       for (col in ds_spec$columns) {
         if (!is.null(col$derivation$logic) && col$derivation$logic != "") {
-          # Determine grouping keys: Variable-level > Dataset-level > None
-          grouping_keys <- NULL
-          if (!is.null(col$derivation$group_by)) {
-            grouping_keys <- unlist(col$derivation$group_by)
-          } else if (!is.null(ds_spec$group_keys)) {
-            grouping_keys <- unlist(ds_spec$group_keys)
-          }
-
-          # Apply grouping if keys exist
-          # Note: This logic needs to be applied carefully.
-          # If we are already grouped by dataset keys, we might need to ungroup and regroup.
-          # For simplicity in this loop, we assume the base grouping is sufficient unless variable-level is specified.
-
-          # Actually, the previous logic I wrote for variable-level grouping was inside the loop but didn't handle the pre-existing group_by well.
-          # Let's refine it.
-
           tryCatch(
             {
-              # If variable has specific grouping, use it
+              # Variable-level grouping logic
               if (!is.null(col$derivation$group_by)) {
                 g_keys <- unlist(col$derivation$group_by)
-                # Map to internal column names (Source_Variable)
-                # This is tricky because we renamed everything.
-                # We need to find the columns that correspond to these keys.
-                # Assuming keys are from the base dataset (first source)
                 g_cols <- paste(sources[1], g_keys, sep = "_")
                 g_cols <- g_cols[g_cols %in% colnames(merged_data)]
 
@@ -184,16 +164,14 @@ generate_adam_shiny <- function(spec, source_datasets, log_callback = NULL) {
                     mutate(!!sym(col$name) := !!rlang::parse_expr(col$derivation$logic)) %>%
                     ungroup()
 
-                  # Restore default grouping if needed
+                  # Restore default grouping
                   if (length(group_cols) > 0) {
                     merged_data <- merged_data %>% group_by(across(all_of(group_cols)))
                   }
                 } else {
-                  # Fallback if keys not found
                   merged_data <- merged_data %>% mutate(!!sym(col$name) := !!rlang::parse_expr(col$derivation$logic))
                 }
               } else {
-                # Use existing grouping
                 merged_data <- merged_data %>% mutate(!!sym(col$name) := !!rlang::parse_expr(col$derivation$logic))
               }
             },
@@ -201,10 +179,6 @@ generate_adam_shiny <- function(spec, source_datasets, log_callback = NULL) {
               log_msg(paste("Error parsing/evaluating logic for", col$name, ":", e$message), type = "ERROR")
             }
           )
-        } else {
-          # Initialize empty/NA if no logic
-          # merged_data <- merged_data %>% mutate(!!sym(col$name) := NA)
-          # Skip initialization to avoid issues, or init as NA
         }
       }
 
@@ -219,7 +193,6 @@ generate_adam_shiny <- function(spec, source_datasets, log_callback = NULL) {
 
       # 7. Select Columns
       final_cols <- sapply(ds_spec$columns, function(x) x$name)
-      # Only select columns that exist
       final_cols <- final_cols[final_cols %in% colnames(merged_data)]
 
       final_data <- merged_data %>% select(all_of(final_cols))
