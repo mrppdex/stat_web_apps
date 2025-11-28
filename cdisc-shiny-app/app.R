@@ -20,7 +20,10 @@ ui <- fluidPage(
     sidebarPanel(
       h4("1. Specification"),
       fileInput("spec_file", "Upload YAML Spec", accept = c(".yaml", ".yml")),
+      fileInput("spec_file", "Upload YAML Spec", accept = c(".yaml", ".yml")),
       textAreaInput("spec_text", "Or Paste YAML Spec Here", height = "200px"),
+      actionButton("validate_btn", "Validate & Load YAML", class = "btn-info btn-sm btn-block"),
+      br(),
       h4("2. Source Data (SDTM)"),
       fileInput("sdtm_files", "Upload SDTM Datasets (CSV/Parquet)", multiple = TRUE, accept = c(".csv", ".parquet")),
       uiOutput("map_ui"),
@@ -171,39 +174,127 @@ server <- function(input, output, session) {
     return(NULL)
   }
 
-  # Parse Spec
-  observe({
-    spec_content <- NULL
-    if (!is.null(input$spec_file)) {
-      spec_content <- yaml::read_yaml(input$spec_file$datapath)
-    } else if (input$spec_text != "") {
-      tryCatch(
-        {
-          spec_content <- yaml::read_yaml(text = input$spec_text)
-        },
-        error = function(e) {
-          # Silent error while typing
-        }
-      )
+  # Validate Spec
+  validate_spec <- function(spec) {
+    errors <- c()
+    warnings <- c()
+
+    if (!is.list(spec)) {
+      return(list(errors = "Spec must be a YAML list/object."))
+    }
+    if (!"datasets" %in% names(spec)) {
+      return(list(errors = "Spec must contain 'datasets' key."))
     }
 
-    if (!is.null(spec_content)) {
-      err <- validate_spec(spec_content)
-      if (!is.null(err)) {
-        add_log(paste("Error validating spec:", err))
-        showModal(modalDialog(
-          title = "Invalid Specification",
-          err,
-          easyClose = TRUE,
-          footer = modalButton("Close")
-        ))
-      } else {
-        rv$spec <- spec_content
-        add_log("Spec loaded and validated successfully.")
-        update_diagram()
+    # Check for unknown root keys
+    known_root_keys <- c("datasets")
+    unknown_root <- setdiff(names(spec), known_root_keys)
+    if (length(unknown_root) > 0) {
+      warnings <- c(warnings, paste("Unknown root keys ignored:", paste(unknown_root, collapse = ", ")))
+    }
+
+    if (!is.list(spec$datasets)) {
+      return(list(errors = "'datasets' must be a list."))
+    }
+
+    for (ds in spec$datasets) {
+      if (!"name" %in% names(ds)) {
+        errors <- c(errors, "All datasets must have a 'name'.")
+        next
+      }
+      if (!"type" %in% names(ds)) errors <- c(errors, paste("Dataset", ds$name, "must have a 'type'."))
+      if (!"columns" %in% names(ds)) errors <- c(errors, paste("Dataset", ds$name, "must have 'columns'."))
+      if (!is.list(ds$columns)) errors <- c(errors, paste("Columns for", ds$name, "must be a list."))
+
+      # Check for unknown dataset keys
+      known_ds_keys <- c("name", "type", "columns", "position", "join_keys", "group_keys", "one_row_per_subject", "label")
+      unknown_ds <- setdiff(names(ds), known_ds_keys)
+      if (length(unknown_ds) > 0) {
+        warnings <- c(warnings, paste("Dataset", ds$name, "has unknown keys:", paste(unknown_ds, collapse = ", ")))
+      }
+
+      for (col in ds$columns) {
+        if (!"name" %in% names(col)) {
+          errors <- c(errors, paste("All columns in", ds$name, "must have a 'name'."))
+          next
+        }
+        if (!"type" %in% names(col)) errors <- c(errors, paste("Column", col$name, "in", ds$name, "must have a 'type'."))
+
+        # Check for unknown column keys
+        known_col_keys <- c("name", "label", "type", "length", "derivation", "format")
+        unknown_col <- setdiff(names(col), known_col_keys)
+        if (length(unknown_col) > 0) {
+          # warnings <- c(warnings, paste("Column", col$name, "in", ds$name, "has unknown keys:", paste(unknown_col, collapse = ", ")))
+          # Suppress column level warnings to avoid noise for things like 'length' or custom metadata
+        }
       }
     }
+
+    if (length(errors) > 0) {
+      return(list(errors = errors, warnings = warnings))
+    }
+    if (length(warnings) > 0) {
+      return(list(warnings = warnings))
+    }
+    return(NULL)
+  }
+
+  # Parse Spec from File
+  observeEvent(input$spec_file, {
+    req(input$spec_file)
+    tryCatch(
+      {
+        spec_content <- yaml::read_yaml(input$spec_file$datapath)
+        process_spec(spec_content)
+      },
+      error = function(e) {
+        showModal(modalDialog(title = "Error", paste("Failed to parse YAML file:", e$message), easyClose = TRUE))
+      }
+    )
   })
+
+  # Parse Spec from Text (Button)
+  observeEvent(input$validate_btn, {
+    req(input$spec_text)
+    tryCatch(
+      {
+        spec_content <- yaml::read_yaml(text = input$spec_text)
+        process_spec(spec_content)
+      },
+      error = function(e) {
+        showModal(modalDialog(title = "Syntax Error", paste("Failed to parse YAML text:", e$message), easyClose = TRUE))
+      }
+    )
+  })
+
+  # Common Spec Processing
+  process_spec <- function(spec_content) {
+    res <- validate_spec(spec_content)
+
+    if (!is.null(res) && !is.null(res$errors)) {
+      add_log(paste("Error validating spec:", paste(res$errors, collapse = "; ")))
+      showModal(modalDialog(
+        title = "Invalid Specification",
+        HTML(paste(c("<b>Errors:</b>", res$errors, if (!is.null(res$warnings)) c("<br/><b>Warnings:</b>", res$warnings)), collapse = "<br/>")),
+        easyClose = TRUE,
+        footer = modalButton("Close")
+      ))
+    } else {
+      if (!is.null(res) && !is.null(res$warnings)) {
+        add_log(paste("Spec validated with warnings:", paste(res$warnings, collapse = "; ")))
+        showModal(modalDialog(
+          title = "Specification Warnings",
+          HTML(paste(res$warnings, collapse = "<br/>")),
+          easyClose = TRUE,
+          footer = modalButton("Continue")
+        ))
+      } else {
+        add_log("Spec loaded and validated successfully.")
+      }
+      rv$spec <- spec_content
+      update_diagram()
+    }
+  }
 
   # Load SDTM Data
   observeEvent(input$sdtm_files, {
