@@ -408,14 +408,16 @@ server <- function(input, output, session) {
           is_warning <- FALSE
           for (w in rv$join_warnings) {
             if (w$target_dataset == ds$name && (w$source_1 == src || w$source_2 == src)) {
-              is_warning <- TRUE
-              break
+              if (!is.null(w$type) && w$type == "many_to_many") {
+                is_warning <- TRUE
+                break
+              }
             }
           }
 
           color <- ifelse(is_warning, "red", "gray")
           penwidth <- ifelse(is_warning, "2.0", "1.0")
-          tooltip <- ifelse(is_warning, "Warning: 1:N Join Detected", "")
+          tooltip <- ifelse(is_warning, "Warning: Many-to-Many Join Detected", "")
 
           edges <- c(edges, sprintf("  %s -> %s [color = '%s', penwidth = '%s', tooltip = '%s'];", src, ds$name, color, penwidth, tooltip))
         }

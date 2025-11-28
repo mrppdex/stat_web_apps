@@ -188,6 +188,21 @@ generate_adam_shiny <- function(spec, source_datasets, log_callback = NULL) {
 
           rows_before <- nrow(merged_data)
 
+          # Check for Many-to-Many (M:N) relationship
+          is_m_n <- FALSE
+          if (length(by_clause) > 0) {
+            left_keys <- merged_data %>% select(all_of(names(by_clause)))
+            right_keys <- src_data %>% select(all_of(by_clause))
+
+            # Check for duplicates in join keys
+            left_dupes <- any(duplicated(left_keys))
+            right_dupes <- any(duplicated(right_keys))
+
+            if (left_dupes && right_dupes) {
+              is_m_n <- TRUE
+            }
+          }
+
           if (length(by_clause) > 0) {
             merged_data <- left_join(merged_data, src_data, by = by_clause)
           } else {
@@ -198,14 +213,23 @@ generate_adam_shiny <- function(spec, source_datasets, log_callback = NULL) {
           rows_after <- nrow(merged_data)
 
           if (rows_after > rows_before) {
-            msg <- paste("Join between", sources[1], "and", src_name, "resulted in row expansion (1:N or M:N). Rows increased from", rows_before, "to", rows_after)
-            log_msg(msg, type = "WARNING")
-            join_warnings[[length(join_warnings) + 1]] <- list(
-              target_dataset = ds_spec$name,
-              source_1 = sources[1],
-              source_2 = src_name,
-              message = msg
-            )
+            msg <- paste("Join between", sources[1], "and", src_name, "resulted in row expansion. Rows increased from", rows_before, "to", rows_after)
+
+            # Only warn if it is M:N or if explicitly requested (but here we focus on M:N as per request)
+            if (is_m_n) {
+              msg <- paste("MANY-TO-MANY JOIN DETECTED between", sources[1], "and", src_name, ". Rows increased from", rows_before, "to", rows_after)
+              log_msg(msg, type = "WARNING")
+              join_warnings[[length(join_warnings) + 1]] <- list(
+                target_dataset = ds_spec$name,
+                source_1 = sources[1],
+                source_2 = src_name,
+                message = msg,
+                type = "many_to_many"
+              )
+            } else {
+              # Log 1:N expansion as INFO or ignore for warning list
+              log_msg(msg, type = "INFO")
+            }
           }
         }
       }
