@@ -31,6 +31,7 @@ generate_llm_prompt <- function(sdtm_data, target_adams, complexity) {
     "**Requirements**:\n",
     "- The output must be a valid YAML string matching the format used in the 'cdisc-shiny-app'.\n",
     "- **IMPORTANT**: You MUST include the SDTM source datasets in the YAML under `datasets` with `type: SDTM`.\n",
+    "- **IMPORTANT**: All columns MUST have a `type` defined (e.g., `text`, `integer`, `float`, `date`).\n",
     "- **Required YAML Structure Example**:\n",
     "datasets:\n",
     "  - name: DM\n",
