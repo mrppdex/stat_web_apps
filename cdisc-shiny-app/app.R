@@ -326,8 +326,8 @@ server <- function(input, output, session) {
   })
 
   # Logs Output
-  output$log_output <- renderText({
-    paste(rv$logs, collapse = "\n")
+  output$logs <- renderUI({
+    HTML(paste(rv$logs, collapse = "<br/>"))
   })
 
   # Preview Tabs
@@ -586,6 +586,7 @@ server <- function(input, output, session) {
       textInput("edit_col_label", "Label", value = ifelse(is.null(col$label), "", col$label)),
       selectInput("edit_col_type", "Type", choices = c("text", "integer", "float", "date", "datetime"), selected = col$type),
       textAreaInput("edit_col_logic", "Derivation Logic (Optional)", value = ifelse(is.null(col$derivation$logic), "", col$derivation$logic)),
+      textInput("edit_col_group_by", "Group By Keys (comma-separated)", value = ifelse(is.null(col$derivation$group_by), "", paste(col$derivation$group_by, collapse = ", "))),
       footer = tagList(
         modalButton("Cancel"),
         actionButton("confirm_edit_col", "Save Changes", class = "btn-primary")
@@ -610,6 +611,20 @@ server <- function(input, output, session) {
           rv$spec$datasets[[i]]$columns[[idx]]$derivation <- list(logic = input$edit_col_logic)
         } else {
           rv$spec$datasets[[i]]$columns[[idx]]$derivation <- NULL
+        }
+
+        # Parse group keys
+        g_keys <- trimws(strsplit(input$edit_col_group_by, ",")[[1]])
+        g_keys <- g_keys[g_keys != ""]
+        if (length(g_keys) > 0) {
+          if (is.null(rv$spec$datasets[[i]]$columns[[idx]]$derivation)) {
+            rv$spec$datasets[[i]]$columns[[idx]]$derivation <- list()
+          }
+          rv$spec$datasets[[i]]$columns[[idx]]$derivation$group_by <- as.list(g_keys)
+        } else {
+          if (!is.null(rv$spec$datasets[[i]]$columns[[idx]]$derivation)) {
+            rv$spec$datasets[[i]]$columns[[idx]]$derivation$group_by <- NULL
+          }
         }
         break
       }
