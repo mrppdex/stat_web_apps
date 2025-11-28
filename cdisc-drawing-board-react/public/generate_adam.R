@@ -133,24 +133,40 @@ generate_adam <- function(spec_file, data_dir = ".") {
       }
 
       # 4. Apply Derivations
-      # Construct mutate expressions
-      mutate_exprs <- list()
-
       for (col in ds_spec$columns) {
         if (!is.null(col$derivation$logic) && col$derivation$logic != "") {
-          # The logic string from spec (e.g. "min(EX_EXSTDTC)") should be valid R expression
-          # involving the prefixed column names we created.
-          mutate_exprs[[col$name]] <- rlang::parse_expr(col$derivation$logic)
-        } else {
-          mutate_exprs[[col$name]] <- NA
+          tryCatch(
+            {
+              # Variable-level grouping logic
+              if (!is.null(col$derivation$group_by)) {
+                g_keys <- unlist(col$derivation$group_by)
+                g_cols <- paste(sources[1], g_keys, sep = "_")
+                g_cols <- g_cols[g_cols %in% colnames(merged_data)]
+
+                if (length(g_cols) > 0) {
+                  merged_data <- merged_data %>%
+                    ungroup() %>%
+                    group_by(across(all_of(g_cols))) %>%
+                    mutate(!!sym(col$name) := !!rlang::parse_expr(col$derivation$logic)) %>%
+                    ungroup()
+
+                  # Restore default grouping
+                  if (length(group_cols) > 0) {
+                    merged_data <- merged_data %>% group_by(across(all_of(group_cols)))
+                  }
+                } else {
+                  merged_data <- merged_data %>% mutate(!!sym(col$name) := !!rlang::parse_expr(col$derivation$logic))
+                }
+              } else {
+                merged_data <- merged_data %>% mutate(!!sym(col$name) := !!rlang::parse_expr(col$derivation$logic))
+              }
+            },
+            error = function(e) {
+              warning(paste("Error parsing/evaluating logic for", col$name, ":", e$message))
+            }
+          )
         }
       }
-
-      # Apply mutate
-      # We use rlang::eval_tidy to evaluate expressions
-      # But simpler is to build a text string for mutate and parse it, or use rlang::!!!
-
-      merged_data <- merged_data %>% mutate(!!!mutate_exprs)
 
       # 5. Handle One Row Per Subject
       if (isTRUE(ds_spec$one_row_per_subject)) {

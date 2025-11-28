@@ -315,6 +315,7 @@ function App() {
               newCol.derivation = {
                 description: col.derivationDescription || '',
                 logic: col.derivationLogic || '',
+                group_by: col.groupBy ? col.groupBy.split(',').map(s => s.trim()).filter(s => s) : undefined,
                 sources: edges
                   .filter(e => e.target === node.id && e.targetHandle === `${col.name}-target`)
                   .map(e => {
