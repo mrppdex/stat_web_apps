@@ -117,38 +117,6 @@ generate_adam_shiny <- function(spec, source_datasets, log_callback = NULL) {
         }
       }
 
-      # 4. Group by Join Keys or Group Keys
-      if (!is.null(ds_spec$group_keys) && length(ds_spec$group_keys) > 0) {
-        group_cols <- paste(sources[1], ds_spec$group_keys, sep = "_")
-      } else {
-        group_cols <- paste(sources[1], ds_spec$join_keys, sep = "_")
-      }
-      group_cols <- group_cols[group_cols %in% colnames(merged_data)]
-
-      if (length(group_cols) > 0) {
-        merged_data <- merged_data %>% group_by(across(all_of(group_cols)))
-      }
-
-      # 5. Apply Derivations
-      mutate_exprs <- list()
-      for (col in ds_spec$columns) {
-        if (!is.null(col$derivation$logic) && col$derivation$logic != "") {
-          tryCatch(
-            {
-              mutate_exprs[[col$name]] <- rlang::parse_expr(col$derivation$logic)
-            },
-            error = function(e) {
-              log_msg(paste("Error parsing logic for", col$name, ":", e$message), type = "ERROR")
-            }
-          )
-        } else {
-          mutate_exprs[[col$name]] <- NA
-        }
-      }
-
-      tryCatch(
-        {
-          merged_data <- merged_data %>% mutate(!!!mutate_exprs)
         },
         error = function(e) {
           log_msg(paste("Error applying derivations for", ds_spec$name, ":", e$message), type = "ERROR")

@@ -557,35 +557,45 @@ server <- function(input, output, session) {
 
     showModal(modalDialog(
       title = paste("Edit Column:", col$name),
-      textInput("edit_col_name", "Column Name", value = col$name),
+      textInput("edit_col_name", "Name", value = col$name),
       textInput("edit_col_label", "Label", value = ifelse(is.null(col$label), "", col$label)),
       selectInput("edit_col_type", "Type", choices = c("text", "integer", "float", "date", "datetime"), selected = col$type),
-      textAreaInput("edit_col_logic", "Derivation Logic (Optional)", value = ifelse(is.null(col$derivation$logic), "", col$derivation$logic)),
+      textAreaInput("edit_col_logic", "Derivation Logic", value = ifelse(is.null(col$derivation$logic), "", col$derivation$logic)),
+      textInput("edit_col_group_by", "Group By Keys (comma-separated)", value = ifelse(is.null(col$derivation$group_by), "", paste(col$derivation$group_by, collapse = ", "))),
       footer = tagList(
         modalButton("Cancel"),
-        actionButton("confirm_edit_col", "Save Changes", class = "btn-primary")
+        actionButton("save_col_edit", "Save", class = "btn-primary")
       )
     ))
   })
 
-  observeEvent(input$confirm_edit_col, {
-    req(rv$spec, rv_explorer$selected_ds, input$exp_columns_table_rows_selected, input$edit_col_name)
+  observeEvent(input$save_col_edit, {
+    req(rv$spec, rv_explorer$selected_ds, input$exp_columns_table_rows_selected)
 
-    idx <- input$exp_columns_table_rows_selected
+    row_idx <- input$exp_columns_table_rows_selected
 
     # Update spec
     for (i in seq_along(rv$spec$datasets)) {
       if (rv$spec$datasets[[i]]$name == rv_explorer$selected_ds) {
-        # Update column properties
-        rv$spec$datasets[[i]]$columns[[idx]]$name <- input$edit_col_name
-        rv$spec$datasets[[i]]$columns[[idx]]$label <- input$edit_col_label
-        rv$spec$datasets[[i]]$columns[[idx]]$type <- input$edit_col_type
+        col <- rv$spec$datasets[[i]]$columns[[row_idx]]
 
-        if (input$edit_col_logic != "") {
-          rv$spec$datasets[[i]]$columns[[idx]]$derivation <- list(logic = input$edit_col_logic)
+        col$name <- input$edit_col_name
+        col$label <- input$edit_col_label
+        col$type <- input$edit_col_type
+
+        if (is.null(col$derivation)) col$derivation <- list()
+        col$derivation$logic <- input$edit_col_logic
+
+        # Parse group keys
+        g_keys <- trimws(strsplit(input$edit_col_group_by, ",")[[1]])
+        g_keys <- g_keys[g_keys != ""]
+        if (length(g_keys) > 0) {
+          col$derivation$group_by <- as.list(g_keys)
         } else {
-          rv$spec$datasets[[i]]$columns[[idx]]$derivation <- NULL
+          col$derivation$group_by <- NULL
         }
+
+        rv$spec$datasets[[i]]$columns[[row_idx]] <- col
         break
       }
     }
