@@ -10,21 +10,67 @@ library(readr)
 library(readr)
 
 # Helper function to impute partial dates
+# Helper function to impute partial dates
 impute_dtc <- function(dtc) {
+  if (is.null(dtc) || length(dtc) == 0) {
+    return(as.Date(character(0)))
+  }
+
   # Ensure character
   dtc <- as.character(dtc)
-  # Handle YYYY-MM-DD (keep as is, but validate)
-  res <- as.Date(dtc, format = "%Y-%m-%d")
+  res <- rep(as.Date(NA), length(dtc))
+
+  # Handle YYYY-MM-DD
+  # We use tryCatch to avoid errors on completely invalid strings
+  tryCatch(
+    {
+      res <- as.Date(dtc, format = "%Y-%m-%d")
+    },
+    error = function(e) {}
+  )
 
   # Handle YYYY-MM
-  mask_ym <- is.na(res) & nchar(dtc) == 7
-  res[mask_ym] <- as.Date(paste0(dtc[mask_ym], "-01"), format = "%Y-%m-%d")
+  mask_ym <- is.na(res) & !is.na(dtc) & nchar(dtc) == 7
+  if (any(mask_ym)) {
+    tryCatch(
+      {
+        res[mask_ym] <- as.Date(paste0(dtc[mask_ym], "-01"), format = "%Y-%m-%d")
+      },
+      error = function(e) {}
+    )
+  }
 
   # Handle YYYY
-  mask_y <- is.na(res) & nchar(dtc) == 4
-  res[mask_y] <- as.Date(paste0(dtc[mask_y], "-01-01"), format = "%Y-%m-%d")
+  mask_y <- is.na(res) & !is.na(dtc) & nchar(dtc) == 4
+  if (any(mask_y)) {
+    tryCatch(
+      {
+        res[mask_y] <- as.Date(paste0(dtc[mask_y], "-01-01"), format = "%Y-%m-%d")
+      },
+      error = function(e) {}
+    )
+  }
 
   return(res)
+}
+
+# Safe min/max functions that return NA instead of Inf
+safe_min <- function(..., na.rm = TRUE) {
+  x <- unlist(list(...))
+  if (na.rm) x <- x[!is.na(x)]
+  if (length(x) == 0) {
+    return(NA)
+  }
+  base::min(x)
+}
+
+safe_max <- function(..., na.rm = TRUE) {
+  x <- unlist(list(...))
+  if (na.rm) x <- x[!is.na(x)]
+  if (length(x) == 0) {
+    return(NA)
+  }
+  base::max(x)
 }
 
 generate_adam_shiny <- function(spec, source_datasets, log_callback = NULL) {
@@ -51,6 +97,18 @@ generate_adam_shiny <- function(spec, source_datasets, log_callback = NULL) {
   }
 
   log_msg("Starting ADaM generation...")
+
+  # Override min/max to be safe by default within this scope
+  min <- safe_min
+  max <- safe_max
+  mean <- function(..., na.rm = TRUE) {
+    x <- unlist(list(...))
+    if (na.rm) x <- x[!is.na(x)]
+    if (length(x) == 0) {
+      return(NA)
+    }
+    base::mean(x)
+  }
 
   join_warnings <- list()
 
