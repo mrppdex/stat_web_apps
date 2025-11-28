@@ -42,36 +42,33 @@ ui <- fluidPage(
           )
         ),
         tabPanel(
-          "LLM Prompt Generator",
+          "Spec Explorer",
           br(),
-          h4("Generate Prompt for Spec Creation"),
-          p("Select the ADaM datasets you want to create and the desired complexity. The app will generate a prompt including your loaded SDTM structures."),
-        tabPanel("Visualization", 
-                 grVizOutput("diagram", height = "600px")
+          fluidRow(
+            column(3, uiOutput("explorer_ds_list")),
+            column(9, uiOutput("explorer_ds_details"))
+          )
         ),
-        tabPanel("Spec Explorer",
-                 br(),
-                 fluidRow(
-                   column(3, uiOutput("explorer_ds_list")),
-                   column(9, uiOutput("explorer_ds_details"))
-                 )
+        tabPanel(
+          "LLM Prompt",
+          br(),
+          selectInput("complexity", "Complexity Level", choices = c("Low", "Medium", "High"), selected = "Medium"),
+          actionButton("gen_prompt_btn", "Generate Prompt", class = "btn-warning"),
+          hr(),
+          textAreaInput("llm_prompt_out", "Generated Prompt", width = "100%", height = "400px"),
+          tags$button("Copy to Clipboard", class = "btn btn-default btn-copy", onclick = "copyToClipboard()")
         ),
-        tabPanel("LLM Prompt",
-           br(),
-           selectInput("complexity", "Complexity Level", choices = c("Low", "Medium", "High"), selected = "Medium"),
-           actionButton("gen_prompt_btn", "Generate Prompt", class = "btn-warning"),
-           hr(),
-           textAreaInput("llm_prompt_out", "Generated Prompt", width = "100%", height = "400px"),
-           tags$button("Copy to Clipboard", class = "btn btn-default btn-copy", onclick = "copyToClipboard()")
+        tabPanel(
+          "Logs",
+          div(id = "log_output", class = "log-container", htmlOutput("logs"))
         ),
-        tabPanel("Logs", 
-                 div(id = "log_output", class = "log-container", htmlOutput("logs"))
+        tabPanel(
+          "Preview",
+          uiOutput("preview_tabs")
         ),
-        tabPanel("Preview", 
-                 uiOutput("preview_tabs")
-        ),
-        tabPanel("YAML Spec",
-                 textAreaInput("spec_text", "Editable Spec", width = "100%", height = "600px")
+        tabPanel(
+          "YAML Spec",
+          textAreaInput("spec_text", "Editable Spec", width = "100%", height = "600px")
         )
       )
     )
@@ -80,7 +77,6 @@ ui <- fluidPage(
 
 # --- Server Logic ---
 server <- function(input, output, session) {
-  
   # Reactive Values
   rv <- reactiveValues(
     spec = NULL,
@@ -89,50 +85,121 @@ server <- function(input, output, session) {
     logs = c(),
     join_warnings = list() # Store join warnings
   )
-  
+
   # Logging Helper
   add_log <- function(msg) {
     timestamp <- format(Sys.time(), "%H:%M:%S")
     rv$logs <- c(paste0("[", timestamp, "] ", msg), rv$logs)
   }
-  
+
   output$logs <- renderUI({
     HTML(paste(rv$logs, collapse = "<br/>"))
   })
-  
+
   # Load Spec
   observeEvent(input$spec_file, {
     req(input$spec_file)
-    tryCatch({
-      rv$spec <- yaml::read_yaml(input$spec_file$datapath)
-      updateTextAreaInput(session, "spec_text", value = yaml::as.yaml(rv$spec))
-      add_log(paste("Loaded specification:", input$spec_file$name))
-      update_diagram()
-    }, error = function(e) {
-      add_log(paste("Error loading spec:", e$message))
-    })
+    tryCatch(
+      {
+        rv$spec <- yaml::read_yaml(input$spec_file$datapath)
+        updateTextAreaInput(session, "spec_text", value = yaml::as.yaml(rv$spec))
+        add_log(paste("Loaded specification:", input$spec_file$name))
+        update_diagram()
+      },
+      error = function(e) {
+        add_log(paste("Error loading spec:", e$message))
+      }
+    )
   })
-  
+
   # Sync Text Area to Spec Object
   observeEvent(input$spec_text, {
     req(input$spec_text)
-    tryCatch({
-      rv$spec <- yaml::read_yaml(text = input$spec_text)
-      update_diagram()
-    }, error = function(e) {
-      # Silent error or log if needed
-    })
+    tryCatch(
+      {
+        rv$spec <- yaml::read_yaml(text = input$spec_text)
+        update_diagram()
+      },
+      error = function(e) {
+        # Silent error or log if needed
+      }
+    )
   })
-  
+
   # Load SDTM/Source Data
   observeEvent(input$sdtm_files, {
     req(input$sdtm_files)
     rv$sdtm_data <- list()
-    
+
     for (i in 1:nrow(input$sdtm_files)) {
       path <- input$sdtm_files$datapath[i]
       name <- tools::file_path_sans_ext(input$sdtm_files$name[i])
       ext <- tools::file_ext(input$sdtm_files$name[i])
+
+      tryCatch(
+        {
+          if (tolower(ext) == "csv") {
+            df <- read_csv(path, show_col_types = FALSE)
+          } else if (tolower(ext) == "parquet") {
+            df <- arrow::read_parquet(path)
+          } else {
+            # Fallback or error
+            add_log(paste("Unsupported file type:", ext))
+            next
+          }
+          rv$sdtm_data[[name]] <- df
+          add_log(paste("Loaded dataset:", name))
+        },
+        error = function(e) {
+          add_log(paste("Error loading", name, ":", e$message))
+        }
+      )
+    }
+  })
+
+  # Map UI
+  output$map_ui <- renderUI({
+    req(rv$sdtm_data)
+    actionButton("map_btn", "Map Datasets to Domains", class = "btn-info btn-block")
+  })
+
+  # Mapping Modal
+  observeEvent(input$map_btn, {
+    req(rv$sdtm_data, rv$spec)
+
+    # Get domains from spec
+    domains <- c()
+    for (ds in rv$spec$datasets) {
+      if (ds$type == "SDTM") domains <- c(domains, ds$name)
+    }
+
+    showModal(modalDialog(
+      title = "Map Uploaded Files to SDTM Domains",
+      lapply(names(rv$sdtm_data), function(file_name) {
+        # Try to guess domain (case insensitive match)
+        selected <- NULL
+        if (toupper(file_name) %in% domains) selected <- toupper(file_name)
+
+        div(
+          style = "display: flex; align-items: center; margin-bottom: 10px;",
+          div(style = "width: 40%; font-weight: bold;", file_name),
+          div(style = "width: 10%; text-align: center;", "->"),
+          div(
+            style = "width: 50%;",
+            selectInput(paste0("map_", file_name), NULL, choices = c("Ignore", domains), selected = selected)
+          )
+        )
+      }),
+      footer = tagList(
+        modalButton("Cancel"),
+        actionButton("save_mapping", "Save Mapping", class = "btn-primary")
+      )
+    ))
+  })
+
+  # Save Mapping
+  observeEvent(input$save_mapping, {
+    req(rv$sdtm_data)
     mapped_data <- list()
 
     for (file_name in names(rv$sdtm_data)) {
