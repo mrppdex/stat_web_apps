@@ -217,7 +217,8 @@ generate_adam_shiny <- function(spec, source_datasets, log_callback = NULL) {
 
             # Only warn if it is M:N or if explicitly requested (but here we focus on M:N as per request)
             if (is_m_n) {
-              msg <- paste("MANY-TO-MANY JOIN DETECTED between", sources[1], "and", src_name, ". Rows increased from", rows_before, "to", rows_after)
+              keys_str <- paste(names(by_clause), collapse = ", ")
+              msg <- paste("MANY-TO-MANY JOIN DETECTED between", sources[1], "and", src_name, "using keys:", keys_str, ". Rows increased from", rows_before, "to", rows_after)
               log_msg(msg, type = "WARNING")
               join_warnings[[length(join_warnings) + 1]] <- list(
                 target_dataset = ds_spec$name,
