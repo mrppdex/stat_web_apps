@@ -42,28 +42,28 @@ ui <- fluidPage(
           )
         ),
         tabPanel(
-          "LLM Prompt Generator",
+          "Spec Explorer",
+          br(),
+          sidebarLayout(
+            sidebarPanel(
+              width = 3,
+              h4("Datasets"),
+              uiOutput("explorer_ds_list"),
+              actionButton("add_ds_btn", "Add Dataset", class = "btn-success btn-sm btn-block"),
+              actionButton("remove_ds_btn", "Remove Selected", class = "btn-danger btn-sm btn-block")
+            ),
+            mainPanel(
+              width = 9,
+              uiOutput("explorer_ds_details")
+            )
+          )
+        ),
+        tabPanel(
+          "LLM Prompt",
           br(),
           h4("Generate Prompt for Spec Creation"),
           p("Select the ADaM datasets you want to create and the desired complexity. The app will generate a prompt including your loaded SDTM structures."),
-          tabPanel(
-            "Visualization",
-            div(
-              style = "height: 600px; overflow: auto;",
-              grVizOutput("diagram", height = "600px")
-            )
-          ),
-          tabPanel(
-            "Spec Explorer",
-            br(),
-            fluidRow(
-              column(3, uiOutput("explorer_ds_list")),
-              column(9, uiOutput("explorer_ds_details"))
-            )
-          ),
-          tabPanel(
-            "LLM Prompt",
-            br(),
+          fluidRow(
             column(
               4,
               checkboxGroupInput("target_adams", "Target ADaM Datasets:",
@@ -109,6 +109,7 @@ ui <- fluidPage(
         ),
         tabPanel(
           "Preview",
+          br(),
           uiOutput("preview_tabs")
         )
       )
