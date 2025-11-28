@@ -54,20 +54,38 @@ impute_dtc <- function(dtc) {
   return(res)
 }
 
-# Safe min/max functions that return NA instead of Inf
+# Safe min/max functions that return NA instead of Inf and preserve Date class
 safe_min <- function(..., na.rm = TRUE) {
-  x <- unlist(list(...))
+  args <- list(...)
+  # Use do.call(c, ...) to preserve Date class better than unlist
+  x <- do.call(c, args)
+
   if (na.rm) x <- x[!is.na(x)]
   if (length(x) == 0) {
+    # Return NA of the same type if possible, otherwise logical NA
+    if (inherits(x, "Date")) {
+      return(as.Date(NA))
+    }
+    if (inherits(x, "POSIXct")) {
+      return(as.POSIXct(NA))
+    }
     return(NA)
   }
   base::min(x)
 }
 
 safe_max <- function(..., na.rm = TRUE) {
-  x <- unlist(list(...))
+  args <- list(...)
+  x <- do.call(c, args)
+
   if (na.rm) x <- x[!is.na(x)]
   if (length(x) == 0) {
+    if (inherits(x, "Date")) {
+      return(as.Date(NA))
+    }
+    if (inherits(x, "POSIXct")) {
+      return(as.POSIXct(NA))
+    }
     return(NA)
   }
   base::max(x)
