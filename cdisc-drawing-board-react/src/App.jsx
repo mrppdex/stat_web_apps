@@ -66,7 +66,7 @@ function App() {
   const [isLoadSpecModalOpen, setLoadSpecModalOpen] = useState(false);
 
   const onConnect = useCallback(
-    (params) => setEdges((eds) => addEdge({ ...params, animated: true, style: { stroke: '#34d399', strokeWidth: 2 } }, eds)),
+    (params) => setEdges((eds) => addEdge({ ...params, animated: false, style: { stroke: '#34d399', strokeWidth: 2 } }, eds)),
     [setEdges],
   );
 
@@ -424,7 +424,7 @@ function App() {
       const hasSelection = nodes.some(n => n.selected);
 
       let style = { strokeWidth: 2 };
-      let animated = true;
+      let animated = false;
       let zIndex = 0;
 
       if (isIntraDataset) {
