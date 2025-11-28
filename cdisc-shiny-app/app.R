@@ -133,6 +133,44 @@ server <- function(input, output, session) {
     rv$logs <- c(rv$logs, msg)
   }
 
+  # Validate Spec
+  validate_spec <- function(spec) {
+    if (!is.list(spec)) {
+      return("Spec must be a YAML list/object.")
+    }
+    if (!"datasets" %in% names(spec)) {
+      return("Spec must contain 'datasets' key.")
+    }
+    if (!is.list(spec$datasets)) {
+      return("'datasets' must be a list.")
+    }
+
+    for (ds in spec$datasets) {
+      if (!"name" %in% names(ds)) {
+        return("All datasets must have a 'name'.")
+      }
+      if (!"type" %in% names(ds)) {
+        return(paste("Dataset", ds$name, "must have a 'type'."))
+      }
+      if (!"columns" %in% names(ds)) {
+        return(paste("Dataset", ds$name, "must have 'columns'."))
+      }
+      if (!is.list(ds$columns)) {
+        return(paste("Columns for", ds$name, "must be a list."))
+      }
+
+      for (col in ds$columns) {
+        if (!"name" %in% names(col)) {
+          return(paste("All columns in", ds$name, "must have a 'name'."))
+        }
+        if (!"type" %in% names(col)) {
+          return(paste("Column", col$name, "in", ds$name, "must have a 'type'."))
+        }
+      }
+    }
+    return(NULL)
+  }
+
   # Parse Spec
   observe({
     spec_content <- NULL
@@ -150,8 +188,20 @@ server <- function(input, output, session) {
     }
 
     if (!is.null(spec_content)) {
-      rv$spec <- spec_content
-      update_diagram()
+      err <- validate_spec(spec_content)
+      if (!is.null(err)) {
+        add_log(paste("Error validating spec:", err))
+        showModal(modalDialog(
+          title = "Invalid Specification",
+          err,
+          easyClose = TRUE,
+          footer = modalButton("Close")
+        ))
+      } else {
+        rv$spec <- spec_content
+        add_log("Spec loaded and validated successfully.")
+        update_diagram()
+      }
     }
   })
 
