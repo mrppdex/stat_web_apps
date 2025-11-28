@@ -310,7 +310,13 @@ function App() {
           group_keys: ds.type === 'ADaM' ? ds.groupKeys : undefined,
           one_row_per_subject: ds.type === 'ADaM' ? ds.oneRowPerSubject : undefined,
           columns: ds.columns.map(col => {
-            const newCol = { name: col.name, desc: col.desc, key: col.key };
+            const newCol = {
+              name: col.name,
+              label: col.label,
+              type: col.type,
+              length: col.length,
+              format: col.format
+            };
             if (ds.type === 'ADaM') {
               newCol.derivation = {
                 description: col.derivationDescription || '',
