@@ -101,7 +101,10 @@ function App() {
     setDerivationModalData({
       datasetName,
       columnName,
-      currentDerivation: col,
+      currentDerivation: {
+        ...col,
+        groupBy: col.groupBy // Ensure this is passed
+      },
       sourceColumns: sources
     });
   };
@@ -189,21 +192,29 @@ function App() {
     }
   };
 
-  const handleSaveDerivation = (datasetName, columnName, derivation) => {
+  const handleSaveDerivation = (datasetName, columnName, { description, logic, groupBy }) => {
     setNodes((nds) => nds.map((node) => {
-      if (node.data.dataset.name === datasetName) {
-        const newCols = node.data.dataset.columns.map(col =>
-          col.name === columnName
-            ? { ...col, derivationDescription: derivation.description, derivationLogic: derivation.logic }
-            : col
-        );
-        const updatedDataset = { ...node.data.dataset, columns: newCols };
+      if (node.data.dataset.name !== datasetName) return node;
+
+      const updatedColumns = node.data.dataset.columns.map(col => {
+        if (col.name !== columnName) return col;
         return {
-          ...node,
-          data: createNodeData(updatedDataset)
+          ...col,
+          derivationDescription: description,
+          derivationLogic: logic,
+          groupBy: groupBy
         };
-      }
-      return node;
+      });
+
+      const updatedDataset = {
+        ...node.data.dataset,
+        columns: updatedColumns
+      };
+
+      return {
+        ...node,
+        data: createNodeData(updatedDataset)
+      };
     }));
   };
 
